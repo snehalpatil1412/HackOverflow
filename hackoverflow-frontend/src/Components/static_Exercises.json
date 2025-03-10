@@ -1,0 +1,68 @@
+{
+  "ExcerciseCards": {
+    "card1": {
+      "title": "Surya Namaskar",
+      "othertitle":"(Sun Salute Pose)",
+      "shortInfo": "A full-body stretch sequence that enhances blood flow, reduces tension, and rejuvenates the mind.",
+      "longInfo": "Surya Namaskar, or Sun Salute Pose, is a dynamic series of postures that warm up and awaken the entire body, helping to alleviate stress. To practice: Begin standing at the front of your mat with hands in prayer. Inhale as you lift your arms overhead, then exhale to forward fold. Step back to plank, lower down, then open into upward-facing dog. Exhale into downward-facing dog, hold, then step forward to repeat on the other side. This series improves circulation, stimulates deep breathing, and leaves you feeling centered."
+    },
+    "card2": {
+      "title": "Seated Spinal Twist",
+      "shortInfo": "Eases tension in the spine and back, promoting relaxation and mental clarity.",
+      "longInfo": "Seated Spinal Twist releases tension along the spine, helping to relieve stress and improve focus. To perform: Sit on the mat with legs extended. Bend the right knee, placing the foot on the outside of the left thigh. Place the right hand behind for support, and with an inhale, lengthen the spine. Exhale as you twist to the right, placing your left elbow on the outside of the right knee. Hold and breathe deeply, then switch sides. This stretch rejuvenates the back muscles, alleviates stress, and promotes better posture."
+    },
+    "card3": {
+      "title": "Child’s Pose",
+      "shortInfo": "A calming posture that gently stretches the back and hips, reducing stress and inducing relaxation.",
+      "longInfo": "Child’s Pose is a gentle stretch that relaxes the mind and releases tension in the back and hips. Begin on hands and knees, then sink your hips back toward your heels while reaching arms forward on the mat. Lower your forehead to the mat and breathe deeply. Hold this position for several breaths, allowing your body to soften. This posture not only calms the nervous system but also stretches the lower back and shoulders, providing a safe space for relaxation."
+    },
+    "card4": {
+      "title": "Wide-Legged Forward Fold With Chest Expansion",
+      "shortInfo": "Opens the chest and relieves shoulder tension, calming the mind.",
+      "longInfo": "The Wide-Legged Forward Fold with Chest Expansion relieves tension in the shoulders and chest while stretching the hamstrings. Stand with feet wide apart, inhale, and clasp your hands behind your back. As you exhale, fold forward from the hips, letting your arms extend overhead. Hold the pose, allowing your head to relax toward the floor. This stretch opens the chest and shoulders, encourages circulation, and can reduce feelings of anxiety."
+    },
+    "card5": {
+      "title": "Rotational Neck Stretch",
+      "shortInfo": "Releases neck and shoulder tension, reducing stress and headaches.",
+      "longInfo": "The Rotational Neck Stretch targets neck muscles that hold stress and tension. Sit or stand comfortably, and slowly rotate your head in a circular motion, feeling the stretch along the sides and back of your neck. Hold each side for a few seconds, breathing deeply as you rotate in both directions. This simple stretch can relieve neck strain, ease headaches, and provide a quick mental break."
+    },
+    "card6": {
+      "title": "Chest Opener Stretch",
+      "shortInfo": "Relieves chest tightness and promotes deep breathing to alleviate stress.",
+      "longInfo": "The Chest Opener Stretch is ideal for relieving stress carried in the chest and shoulders. Stand or kneel, clasp your hands behind your back, and lift your arms slightly while pressing your chest forward. Take slow, deep breaths as you hold the stretch for 15-30 seconds. This posture not only opens the chest for better breathing but also releases built-up tension, helping you feel more relaxed and open."
+    },
+    "card7": {
+      "title": "Lying Glute Stretch",
+      "shortInfo": "A gentle stretch for lower back and hips that relieves stress and releases tight muscles.",
+      "longInfo": "The Lying Glute Stretch releases tension in the lower back and hips, making it ideal for relieving stress. Lie on your back, bring your right knee toward your chest, and cross your ankle over your left thigh. Hold behind your left thigh and gently pull toward you, feeling the stretch in your glute. Hold, then switch sides. This stretch targets hip tension, improves flexibility, and encourages relaxation in the lower body."
+    }
+  },
+
+  "yogaCards": {
+    "card1": {
+      "title": "Balasana (Child’s Pose)",
+      "shortInfo": "A grounding pose that calms the mind, relieves back tension, and encourages deep breathing.",
+      "longInfo": "Balasana, or Child’s Pose, is a restorative posture that helps calm the mind and gently stretches the lower back. To practice, start on all fours and sit back on your heels. Extend your arms forward, lowering your torso toward the floor, and rest your forehead on the mat. Breathe deeply, letting go of tension with each exhale. This pose soothes the nervous system, alleviates stress, and promotes relaxation by stretching the spine, hips, and shoulders."
+    },
+    "card2": {
+      "title": "Adho Mukha Svanasana (Downward-Facing Dog)",
+      "shortInfo": "An invigorating pose that relieves tension in the back, shoulders, and legs while reducing stress.",
+      "longInfo": "Adho Mukha Svanasana, or Downward-Facing Dog, is a classic yoga pose that stretches and strengthens the entire body, helping to alleviate stress. Begin on all fours, tuck your toes under, and lift your hips toward the ceiling, forming an inverted V shape. Press your palms firmly into the mat, straighten your legs (knees can be slightly bent if needed), and let your head relax. This pose improves circulation, releases shoulder tension, and calms the mind, leaving you feeling refreshed."
+    },
+    "card3": {
+      "title": "Savasana (Corpse Pose)",
+      "shortInfo": "A meditative pose that encourages relaxation, reduces stress, and promotes mindfulness.",
+      "longInfo": "Savasana, or Corpse Pose, is a deeply relaxing posture often practiced at the end of a yoga session. Lie on your back with legs and arms comfortably extended, palms facing up. Close your eyes, breathe naturally, and focus on relaxing each part of your body from head to toe. This pose encourages a deep state of rest, lowers stress levels, and can help alleviate anxiety. It’s an excellent way to end a practice, leaving you feeling balanced and centered."
+    },
+    "card4": {
+      "title": "Viparita Karani (Legs-Up-the-Wall Pose)",
+      "shortInfo": "A gentle inversion that calms the mind, reduces anxiety, and soothes tired legs.",
+      "longInfo": "Viparita Karani, or Legs-Up-the-Wall Pose, is a restorative posture that helps relieve stress and fatigue. Sit with one hip close to a wall, then swing your legs up as you recline, lying flat with your legs vertically against the wall. Adjust so that your back and head are resting comfortably on the floor. Close your eyes, and take slow breaths, allowing your body to fully relax. This pose reverses blood flow, reduces stress, and can relieve swollen feet and legs, creating a sense of calm."
+    },
+    "card5": {
+      "title": "Utthita Trikonasana (Extended Triangle Pose)",
+      "shortInfo": "A standing pose that opens the chest, stretches the body, and enhances focus while reducing stress.",
+      "longInfo": "Utthita Trikonasana, or Extended Triangle Pose, helps to relieve stress by stretching and opening up the chest, hips, and legs. Start standing with feet wide apart, turn your right foot out, and extend both arms at shoulder height. Reach forward with your right arm, then tilt down, placing your right hand on your shin or the floor, while extending your left arm upward. Look up at your left hand, hold, and breathe deeply. Switch sides. This pose releases tension in the body, improves balance, and fosters mental clarity."
+    }
+  }
+}
