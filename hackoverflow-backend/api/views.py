@@ -1,3 +1,9 @@
+# 1. Uses Google Translate (via googletrans) to support multiple languages
+# 2. Maps certain emotions (Anger, Disgust, Fear, Sad) as indicators of stress
+# 3. Extracts audio from videos using FFmpeg
+# 4. xxverts speech to text using Google's speech recognition API
+# 5. Django REST framework for API endpoints
+
 from django.http import JsonResponse, HttpResponse
 from tensorflow import keras
 from tensorflow.keras.models import load_model # type: ignore
@@ -16,6 +22,7 @@ import cv2
 from pydub import AudioSegment
 import logging
 import traceback
+from googletrans import Translator
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +40,9 @@ text_model = load_model(TEXT_MODEL_PATH)
 # Load the emotion detection model
 emotion_model = load_model(EMOTION_MODEL_PATH)
 
+# Initialize translator
+translator = Translator()
+
 def home(request):
     return HttpResponse("Welcome to the Stress Detection API!")
 
@@ -40,8 +50,19 @@ def home(request):
 @api_view(['POST'])
 def predict_stress_from_text(request):
     data = request.data.get('text', None)
+    language = request.data.get('language', 'en')  # Default to English
+    
     if not data:
         return JsonResponse({"error": "No text provided"}, status=400)
+
+    # Translate text to English if not already in English
+    if language != 'en':
+        try:
+            translated = translator.translate(data, src=language, dest='en')
+            data = translated.text
+        except Exception as e:
+            logger.error(f"Translation error: {str(e)}")
+            return JsonResponse({"error": f"Translation error: {str(e)}"}, status=400)
 
     # Tokenize and preprocess the input text
     text_sequence = text_tokenizer.texts_to_sequences([data])
@@ -52,6 +73,7 @@ def predict_stress_from_text(request):
     stress = int(prediction > 0.5)  # 1 if stress, 0 if no stress
 
     return JsonResponse({'stress': stress})
+
 
 def extract_frames(video_path, frame_interval=30):
     video = cv2.VideoCapture(video_path)
@@ -114,7 +136,7 @@ def process_video(video_path):
 
     return final_stress_decision, frame_results
 
-def extract_audio_text(video_path):
+def extract_audio_text(video_path, language='en'):
     temp_audio_path = "temp_audio.wav"
     
     try:
@@ -139,6 +161,7 @@ def extract_audio_text(video_path):
 
         recognizer = sr.Recognizer()
         full_text = ""
+        original_language = language
 
         for i, chunk in enumerate(chunks):
             chunk_path = f"chunk_{i}.wav"
@@ -147,7 +170,8 @@ def extract_audio_text(video_path):
             with sr.AudioFile(chunk_path) as source:
                 audio_data = recognizer.record(source)
                 try:
-                    text = recognizer.recognize_google(audio_data)
+                    # Use the specified language for speech recognition
+                    text = recognizer.recognize_google(audio_data, language=language)
                     full_text += text + " "
                 except sr.UnknownValueError:
                     logger.warning(f"Chunk {i}: Could not understand audio")
@@ -156,17 +180,30 @@ def extract_audio_text(video_path):
 
             os.remove(chunk_path)  # Clean up chunk file
 
-        return full_text.strip() if full_text else "No text detected"
+        original_text = full_text.strip() if full_text else "No text detected"
+        
+        # Translate to English if not already in English
+        if language != 'en' and original_text != "No text detected":
+            try:
+                translated = translator.translate(original_text, src=language, dest='en')
+                english_text = translated.text
+                return original_text, english_text, original_language
+            except Exception as e:
+                logger.error(f"Translation error: {str(e)}")
+                return original_text, original_text, original_language
+        
+        return original_text, original_text, original_language
 
     except Exception as e:
         logger.error(f"Error in speech recognition: {str(e)}")
         logger.error(traceback.format_exc())
-        return f"Error extracting text: {str(e)}"
+        return f"Error extracting text: {str(e)}", f"Error extracting text: {str(e)}", language
 
     finally:
         if os.path.exists(temp_audio_path):
             os.remove(temp_audio_path)
             logger.debug("Cleaned up temporary audio file")
+
 
 # Process video for emotion detection and speech-to-text conversion
 @api_view(['POST'])
@@ -174,6 +211,8 @@ def upload_video(request):
     video_path = None
     try:
         file = request.FILES.get('file')
+        language = request.data.get('language', 'en')  # Get language from request, default to English
+        
         if not file:
             return JsonResponse({"error": "No file provided"}, status=400)
 
@@ -190,45 +229,63 @@ def upload_video(request):
         # Run facial expression detection and text extraction in parallel
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_video_stress = executor.submit(process_video, video_path)
-            future_extracted_text = executor.submit(extract_audio_text, video_path)
+            future_extracted_text = executor.submit(extract_audio_text, video_path, language)
 
             # Get results from the threads
             video_stress_result, frame_results = future_video_stress.result()
-            extracted_text = future_extracted_text.result()
+            original_text, english_text, detected_language = future_extracted_text.result()
 
+        # Check if facial expressions were detected
+        valid_facial_data = len(frame_results) > 0
+        video_stress_result = video_stress_result if valid_facial_data else "No facial expressions detected"
+        
+        # Check if text was extracted
+        valid_text_data = english_text and english_text != "No text detected" and not english_text.startswith("Error")
+        
         # Predict stress from extracted text
-        if extracted_text and extracted_text != "No text detected":
-            text_sequence = text_tokenizer.texts_to_sequences([extracted_text])
+        if valid_text_data:
+            text_sequence = text_tokenizer.texts_to_sequences([english_text])
             padded_sequence = pad_sequences(text_sequence, maxlen=MAX_LEN)
             text_prediction = text_model.predict(padded_sequence)
             text_stress = int(text_prediction > 0.5)  # 1 = stressed, 0 = not stressed
             text_stress_result = "Stressed" if text_stress else "Not Stressed"
         else:
-            text_stress_result = "No text detected"
+            text_stress_result = "No speech detected"
 
-
-        # Compute the final stress decision based on both extracted text and facial expressions
-        if video_stress_result == "Stressed" and text_stress_result == "Stressed":
-            final_stress_decision = "Stressed"
-        elif video_stress_result == "Stressed" or text_stress_result == "Not Stressed":
-            final_stress_decision = "Not Stressed"
-        elif video_stress_result == "Not Stressed" or text_stress_result == "Stressed":
-            final_stress_decision = "Moderate Stress"
+        # Compute the final stress decision based on available data
+        if not valid_facial_data and not valid_text_data:
+            # Neither facial nor text data available
+            final_stress_decision = "Unable to determine stress - no data available"
+        elif not valid_facial_data:
+            # Only text data available
+            final_stress_decision = text_stress_result
+        elif not valid_text_data:
+            # Only facial data available
+            final_stress_decision = video_stress_result
         else:
-            final_stress_decision = "Not Stressed"
+            # Both data available - use original logic
+            if video_stress_result == "Stressed" and text_stress_result == "Stressed":
+                final_stress_decision = "Highly Stressed"
+            elif video_stress_result == "Stressed" and text_stress_result == "Not Stressed":
+                final_stress_decision = "Moderate Stress"
+            elif video_stress_result == "Not Stressed" and text_stress_result == "Stressed":
+                final_stress_decision = "Moderate Stress"
+            else:
+                final_stress_decision = "Not Stressed"
             
         # Print only the required values
-            print(f"Final Stress Decision (Facial Expressions): {video_stress_result}")
-            print(f"Final Stress Decision (Extracted Text): {text_stress_result}")
-            print(f"Final Stress Decision: {final_stress_decision}")
+        print(f"Final Stress Decision (Facial Expressions): {video_stress_result}")
+        print(f"Final Stress Decision (Extracted Text): {text_stress_result}")
+        print(f"Final Stress Decision: {final_stress_decision}")
 
+        # Prepare response data
         response_data = {
             "Final Stress Decision": final_stress_decision,
-            "Frame Results": frame_results,
-            "Extracted Text": extracted_text,
+            "Frame Results": frame_results if valid_facial_data else [],
+            "Extracted Text": original_text,
+            "Detected Language": detected_language,
             "Final Stress Decision (Facial Expressions)": video_stress_result,
             "Final Stress Decision (Extracted Text)": text_stress_result,
-            
         }
 
         return JsonResponse(response_data)
