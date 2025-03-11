@@ -11,10 +11,10 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
-import os
+# import os
 
 
-PORT = os.getenv("PORT", "8000") 
+# PORT = os.getenv("PORT", "8000") 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -29,14 +29,7 @@ SECRET_KEY = "django-insecure-8)c!-n^t80n%2n0$=hllr)4cscqf*)lnrtvri)kj6inu1x674=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [
-    "calmify-a-stress-reduction-space.onrender.com",
-    "calmify-stress-reduction-space.netlify.app",
-    "localhost",
-    "127.0.0.1",
-    ]
-
-
+ALLOWED_HOSTS = []
 
 # Application definition
 
@@ -65,15 +58,12 @@ MIDDLEWARE = [
     
 ]
 
-# CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = True
 
-# CORS_ALLOWED_ORIGINS = [
-#     "http://calmify-stress-reduction-space.netlify.app",
-#     "http://localhost:3000", 
+CORS_ALLOWED_ORIGINS = []
+# CSRF_TRUSTED_ORIGINS = [
+#     "http://calmify-stress-reduction-space.netlify.app",    
 # ]
-CSRF_TRUSTED_ORIGINS = [
-    "http://calmify-stress-reduction-space.netlify.app",    
-]
 
 ROOT_URLCONF = 'backend.urls'
 
@@ -142,26 +132,12 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
-CORS_ALLOWED_ORIGINS = [
-    "https://calmify-stress-reduction-space.netlify.app",
-    "http://localhost:3002",
-]
-
-CORS_ALLOW_ALL_ORIGINS = True  
-# Allow all methods and headers if needed
 CORS_ALLOW_METHODS = [
     "GET",
     "POST",
