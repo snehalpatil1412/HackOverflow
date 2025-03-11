@@ -1,9 +1,26 @@
 import React, { useRef, useState, useEffect } from 'react';
-import styled, { keyframes } from 'styled-components';
 import videobg from "../../assets/videobg.png";
+import styled, { keyframes } from "styled-components";
 import saveStressData from "../../FirebaseUtils";
 import { useNavigate } from "react-router-dom";
-import { GridItem, Text, Heading, useDisclosure, Modal, useBreakpointValue, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, AspectRatio } from "@chakra-ui/react";
+import { 
+  GridItem, 
+  Text, 
+  Heading, 
+  useDisclosure, 
+  Modal, 
+  useBreakpointValue, 
+  ModalOverlay, 
+  ModalContent, 
+  ModalHeader, 
+  ModalFooter, 
+  ModalBody, 
+  AspectRatio,
+  Select,
+  FormControl,
+  FormLabel
+} from "@chakra-ui/react";
+
 
 const spin = keyframes`
   0% { transform: rotate(0deg); }
@@ -342,6 +359,7 @@ const VideoLink = styled.button`
   }
 `;
 
+
 const VideoPage = () => {
   const navigate = useNavigate();
   const videoRef = useRef(null);
@@ -360,8 +378,31 @@ const VideoPage = () => {
   const [selectedVideo, setSelectedVideo] = useState(null);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const modalSize = useBreakpointValue({ base: "full", md: "xl", lg: "2xl" });
+  const [language, setLanguage] = useState("en");
+  const [detectedLanguage, setDetectedLanguage] = useState("");
+  const [extractedText, setExtractedText] = useState("");
 
-  useEffect(() => {
+  // Available languages for speech recognition
+  const languages = [
+    { code: "en", name: "English" },
+    { code: "hi", name: "Hindi" },
+    { code: "mr", name: "Marathi" },
+    { code: "es", name: "Spanish" },
+    { code: "fr", name: "French" },
+    { code: "de", name: "German" },
+    { code: "zh-CN", name: "Chinese (Simplified)" },
+    { code: "ja", name: "Japanese" },
+    { code: "ru", name: "Russian" },
+    { code: "ar", name: "Arabic" },
+    { code: "pt", name: "Portuguese" },
+    { code: "it", name: "Italian" },
+    { code: "nl", name: "Dutch" },
+    { code: "ko", name: "Korean" },
+    { code: "ta", name: "Tamil" },
+    { code: "te", name: "Telugu" },
+  ];
+
+    useEffect(() => {
     let interval;
     if (recording) {
       interval = setInterval(() => {
@@ -522,9 +563,10 @@ const VideoPage = () => {
     setIsProcessing(true);
     const formData = new FormData();
     formData.append("file", videoBlob);
+    formData.append("language", language); // Send the selected language to the backend
 
     try {
-      const response = await fetch("https://calmify-a-stress-reduction-space.onrender.com/api/upload_video/", {
+      const response = await fetch("http://127.0.0.1:8000/api/upload_video/", {
         method: "POST",
         body: formData,
       });
@@ -533,8 +575,10 @@ const VideoPage = () => {
       console.log("Response Data:", data);
 
       setEmotion(data["Final Stress Decision"]);
+      setExtractedText(data["Extracted Text"]);
+      setDetectedLanguage(data["Detected Language"] || language);
 
-      if (data["Final Stress Decision"] === "Stressed" || data["Final Stress Decision"] === "Moderate Stress") {
+      if (data["Final Stress Decision"] === "Highly Stressed" || data["Final Stress Decision"] === "Moderate Stress") {
         const shuffledVideos = shuffleArray(youtubeVideos).slice(0, 3);
         setVideos(shuffledVideos);
 
@@ -575,8 +619,10 @@ const VideoPage = () => {
     setShowRecordingScreen(false);
     setShowProcessButtons(false);
     setVideoBlob(null);
-    setVideos(false);
+    setVideos([]);
     setEmotion("");
+    setExtractedText("");
+    setDetectedLanguage("");
     if (videoRef.current) {
       videoRef.current.pause();
       videoRef.current.srcObject = null;
@@ -604,6 +650,11 @@ const VideoPage = () => {
     navigate("/music");
   };
 
+  const handleLanguageChange = (e) => {
+    setLanguage(e.target.value);
+  };
+
+
   return (
     <MainContainer>
       {showMainButtons && (
@@ -617,6 +668,25 @@ const VideoPage = () => {
               Use this feature to record or upload a video. It will analyze your emotions and help reduce stress through
               personalized recommendations.
             </Description>
+            
+            {/* Language Selection Dropdown */}
+            <FormControl mb={4}>
+              <FormLabel>Select Language for Speech Recognition</FormLabel>
+              <Select 
+                value={language} 
+                onChange={handleLanguageChange}
+                bg="white"
+                borderColor="#d1d1d1"
+                _hover={{ borderColor: "rgb(116, 63, 238)" }}
+              >
+                {languages.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </option>
+                ))}
+              </Select>
+            </FormControl>
+            
             <ButtonGroup>
               <Button onClick={handleStartRecordingScreen}>Record Video</Button>
               <Button onClick={handleOpenFileSystem}>Upload Video</Button>
@@ -655,12 +725,25 @@ const VideoPage = () => {
         )}
 
         {isProcessing && <ProcessingSpinner />}
+        
+        {extractedText && (
+          <EmotionFrame>
+            <Heading size="md" mb={4} color="rgb(108, 59, 222)">
+              Speech Recognition Results
+            </Heading>
+            <Text mb={2} fontWeight="bold">Detected Language: {detectedLanguage}</Text>
+            <EmotionText>
+              {extractedText}
+            </EmotionText>
+          </EmotionFrame>
+        )}
+        
         {emotion && (
           <EmotionFrame>
             <Heading size="md" mb={4} color="rgb(108, 59, 222)">
               Recommendation Based on Your Results
             </Heading>
-            {emotion === "Stressed" || emotion === "Moderate Stress" ? (
+            {emotion === "Highly Stressed" || emotion === "Moderate Stress" ? (
               <EmotionText>
                 It seems you're feeling {emotion}. No worries, we're here to help you relax and feel better! Here are some videos to calm your mind.
               </EmotionText>
