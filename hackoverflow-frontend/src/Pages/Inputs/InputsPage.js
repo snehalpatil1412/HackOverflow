@@ -289,7 +289,7 @@ function InputsPage() {
           </CardContent>
         </StyledCard>
 
-        <StyledCard onClick={() => handleNavigation("/audio")}>
+        {/* <StyledCard onClick={() => handleNavigation("/audio")}>
           <StyledImage src={AudioImage} alt="Audio" />
           <CardContent>
             <StyledHeading>Audio</StyledHeading>
@@ -320,7 +320,7 @@ function InputsPage() {
             </StyledText>
             <StarRating>{renderStars("quiz")}</StarRating>
           </CardContent>
-        </StyledCard>
+        </StyledCard> */}
       </StyledStack>
       {/* Mindfulness Section */}
       <div style={{ textAlign: "center", marginTop: "50px" }}>
