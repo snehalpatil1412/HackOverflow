@@ -54,9 +54,9 @@ const Nav = () => {
           <NavLi>
             <StyledLink to="exercises" smooth={true} duration={500} onClick={() => setIsNavOpen(false)}>EXERCISES</StyledLink>
           </NavLi>
-          <NavLi>
+          {/* <NavLi>
             <StyledLink to="feedback" smooth={true} duration={500} onClick={() => setIsNavOpen(false)}>FEEDBACK</StyledLink>
-          </NavLi>
+          </NavLi> */}
         </NavLinks>
       </NavBar>
     </StickyContainer>
