@@ -25,6 +25,7 @@ import QuizeImage from "../../assets/quizeoption.jpeg";
 import CalmifyLogo from "../../assets/logocalmify.png";
 import ActiveAlert from "../../assets/activealert.png";
 import Alert1 from "../../assets/alert.png";
+import CalendarIcon from "../../assets/calendar.png"; // Import the calendar icon
 import Mindful from "./Activities/Mindful.js";
 // import ConsultDr from "./Activities/ConsultDr.js";
 import { onAuthStateChanged } from "firebase/auth";
@@ -145,6 +146,11 @@ function InputsPage() {
     navigate("/alertDr");
   };
 
+  // Handle navigation to calendar page
+  const handleCalendarNav = () => {
+    navigate("/calendar");
+  };
+
   // Handle navigation
   const handleNavigation = (path) => {
     navigate(path);
@@ -178,8 +184,6 @@ function InputsPage() {
 
         <AlertContainer>
           <Popover
-          
-          // backgro: rgb(255, 201, 214);
             mt={10}
             placement="left"
             isOpen={isOpen && stressOverloaded}
@@ -203,7 +207,6 @@ function InputsPage() {
                 />
               ) : (
                 <StaticAlert
-                  // onClick={handleAlertClick}
                   src={Alert1}
                   alt="Alert"
                 />
@@ -223,6 +226,11 @@ function InputsPage() {
             </StyledPopoverContent>
           </Popover>
         </AlertContainer>
+
+        {/* Calendar Icon */}
+        <CalendarIconContainer onClick={handleCalendarNav}>
+          <CalendarImg src={CalendarIcon} alt="Calendar" />
+        </CalendarIconContainer>
 
         <Button
           onClick={() => {
@@ -342,10 +350,6 @@ const StyledPopoverContent = styled(PopoverContent)`
   border: 1px solid #e9ecef;
   padding: 16px;
   width: 500px;
-  // margintop: "40px" @media (max-width: 768px) {
-  //   max-width: 280px;
-  //   margin: 0 10px;
-  // }
 `;
 
 const PopoverHeader = styled.div`
@@ -504,15 +508,34 @@ const LogoImg = styled.img`
   cursor: pointer;
 `;
 
+// New styled component for Calendar Icon
+const CalendarIconContainer = styled.div`
+  display: flex;
+  align-items: center;
+  margin-right: 20px;
+  cursor: pointer;
+  
+  @media (max-width: 768px) {
+    margin-right: 10px;
+  }
+`;
+
+const CalendarImg = styled.img`
+  height: 30px;
+  width: 30px;
+  transition: transform 0.2s;
+  
+  &:hover {
+    transform: scale(1.1);
+  }
+`;
+
 const AlertContainer = styled.div`
   display: flex;
   align-items: center;
   margin-right: 40px;
   @media (max-width: 768px) {
     margin-left: 10px;
-    // margin-right: 10px;
-
-    // padding: 10px;
     order: 1;
   }
 `;
