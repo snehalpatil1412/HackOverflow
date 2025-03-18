@@ -42,7 +42,7 @@ function StressReductionLogin({ setUser }) {
         position: "top",
       });
 
-      navigate("/dashboard");
+      navigate("/input");
     } catch (error) {
       toast({
         title: "Connection interrupted",
