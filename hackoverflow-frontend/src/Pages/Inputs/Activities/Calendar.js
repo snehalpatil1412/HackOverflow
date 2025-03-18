@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import { getDatabase, ref, set, onValue, remove } from 'firebase/database';
+import { auth } from '../../../firebaseConfig';  // Firebase config import
 
 const CalendarContainer = styled.div`
   display: flex;
@@ -109,12 +111,24 @@ const DateNumber = styled.div`
 `;
 
 const EventTitle = styled.div`
-  margin-top: 8px;
+  margin-top: 5px;
   background: #ffcc66;
-  padding: 4px;
+  color: #333;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: 0.3s;
+
+  &:hover {
+    background: #ffa500;
+    color: white;
+  }
 `;
+
 
 const EventList = styled.div`
   width: 300px;
@@ -146,6 +160,8 @@ const RemoveButton = styled.button`
   }
 `;
 
+
+
 const AddEventForm = styled.div`
   display: flex;
   flex-direction: column;
@@ -176,48 +192,57 @@ const Calendar = () => {
   const [events, setEvents] = useState([]);
   const [newEvent, setNewEvent] = useState({ date: '', time: '', title: '' });
 
-  const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
+  useEffect(() => {
+    fetchEvents();
+  }, []);
 
-  const prevMonth = () => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(currentDate.getMonth() - 1);
-    setCurrentDate(newDate);
-  };
+  const fetchEvents = () => {
+    const userId = auth.currentUser?.uid;
 
-  const nextMonth = () => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(currentDate.getMonth() + 1);
-    setCurrentDate(newDate);
-  };
+    if (!userId) return;
 
-  const formatTime = (time) => {
-    const [hour, minute] = time.split(':').map(Number);
-    const period = hour >= 12 ? 'PM' : 'AM';
-    const formattedHour = hour % 12 || 12;
-    return `${formattedHour}:${minute.toString().padStart(2, '0')} ${period}`;
+    const db = getDatabase();
+    const eventsRef = ref(db, `users/${userId}/events`);
+
+    onValue(eventsRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      const loadedEvents = Object.keys(data).map((key) => ({
+        id: key,
+        ...data[key]
+      }));
+      setEvents(loadedEvents);
+    });
   };
 
   const addEvent = () => {
-    if (newEvent.date && newEvent.time && newEvent.title) {
-      const newEvents = [...events, { ...newEvent }];
-      setEvents(newEvents);
+    const userId = auth.currentUser?.uid;
+
+    if (!userId || !newEvent.date || !newEvent.time || !newEvent.title) return;
+
+    const db = getDatabase();
+    const eventRef = ref(db, `users/${userId}/events/${Date.now()}`);
+
+    set(eventRef, {
+      eventName: newEvent.title,
+      eventDate: newEvent.date,
+      eventTime: newEvent.time
+    }).then(() => {
       setNewEvent({ date: '', time: '', title: '' });
-    }
+      fetchEvents();
+    });
   };
 
-  const removeEvent = (index) => {
-    const updatedEvents = [...events];
-    updatedEvents.splice(index, 1);
-    setEvents(updatedEvents);
+  const removeEvent = (id) => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+
+    const db = getDatabase();
+    const eventRef = ref(db, `users/${userId}/events/${id}`);
+    remove(eventRef).then(() => fetchEvents());
   };
 
-  const getEventCountForMonth = (year, month) => {
-    return events.filter((event) => {
-      const [eventYear, eventMonth] = event.date.split('-').map(Number);
-      return eventYear === year && eventMonth === month + 1;
-    }).length;
-  };
+  const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -240,7 +265,10 @@ const Calendar = () => {
               active={month === index}
               onClick={() => setCurrentDate(new Date(year, index, 1))}
             >
-              {name} <EventCount>({getEventCountForMonth(year, index)})</EventCount>
+              {name} <EventCount>({events.filter(event => {
+                const [eventYear, eventMonth] = event.eventDate.split('-').map(Number);
+                return eventYear === year && eventMonth === index + 1;
+              }).length})</EventCount>
             </SidebarItem>
           ))}
         </SidebarList>
@@ -248,9 +276,9 @@ const Calendar = () => {
 
       <MainCalendar>
         <CalendarHeader>
-          <HeaderButton onClick={prevMonth}>{'<'}</HeaderButton>
+          <HeaderButton onClick={() => setCurrentDate(new Date(year, month - 1, 1))}>{'<'}</HeaderButton>
           <span>{monthName} {year}</span>
-          <HeaderButton onClick={nextMonth}>{'>'}</HeaderButton>
+          <HeaderButton onClick={() => setCurrentDate(new Date(year, month + 1, 1))}>{'>'}</HeaderButton>
         </CalendarHeader>
 
         <CalendarDays>
@@ -263,18 +291,21 @@ const Calendar = () => {
           ))}
 
           {days.map((day) => {
-            const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const event = events.find((e) => e.date === date);
-
+            const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const dayEvents = events.filter(event => event.eventDate === formattedDate);
+          
             return (
-              <Day key={day} hasEvent={!!event}>
+              <Day key={day} hasEvent={dayEvents.length > 0}>
                 <DateNumber>{day}</DateNumber>
-                {event && (
-                  <EventTitle>{`${event.title} @ ${formatTime(event.time)}`}</EventTitle>
-                )}
+                {dayEvents.map((event, index) => (
+                  <EventTitle key={index}>
+                    {event.eventName} @ {event.eventTime}
+                  </EventTitle>
+                ))}
               </Day>
             );
           })}
+
         </CalendarDays>
       </MainCalendar>
 
