@@ -307,7 +307,7 @@ def upload_video(request):
                 final_stress_decision = "Not Stressed"
 
         # Query Mistral for suggestions
-        api_key = ""
+        api_key = "<your-api-key>"
         if valid_text_data:
             prompt = f"""
             User Concern: {english_text}
