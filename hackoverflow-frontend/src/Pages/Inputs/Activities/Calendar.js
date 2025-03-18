@@ -174,7 +174,7 @@ const Button = styled.button`
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
-  const [newEvent, setNewEvent] = useState({ date: '', title: '' });
+  const [newEvent, setNewEvent] = useState({ date: '', time: '', title: '' });
 
   const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
@@ -191,11 +191,18 @@ const Calendar = () => {
     setCurrentDate(newDate);
   };
 
+  const formatTime = (time) => {
+    const [hour, minute] = time.split(':').map(Number);
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const formattedHour = hour % 12 || 12;
+    return `${formattedHour}:${minute.toString().padStart(2, '0')} ${period}`;
+  };
+
   const addEvent = () => {
-    if (newEvent.date && newEvent.title) {
-      const newEvents = [...events, { date: newEvent.date, title: newEvent.title }];
+    if (newEvent.date && newEvent.time && newEvent.title) {
+      const newEvents = [...events, { ...newEvent }];
       setEvents(newEvents);
-      setNewEvent({ date: '', title: '' });
+      setNewEvent({ date: '', time: '', title: '' });
     }
   };
 
@@ -221,7 +228,6 @@ const Calendar = () => {
 
   return (
     <CalendarContainer>
-      {/* Sidebar */}
       <Sidebar>
         <SidebarTitle>{year}</SidebarTitle>
         <SidebarList>
@@ -240,7 +246,6 @@ const Calendar = () => {
         </SidebarList>
       </Sidebar>
 
-      {/* Calendar Section */}
       <MainCalendar>
         <CalendarHeader>
           <HeaderButton onClick={prevMonth}>{'<'}</HeaderButton>
@@ -253,9 +258,8 @@ const Calendar = () => {
             <DayHeader key={day}>{day}</DayHeader>
           ))}
 
-          {/* Empty cells for the correct start day */}
           {emptyCells.map((_, index) => (
-            <EmptyCell key={`empty-${index}`}></EmptyCell>
+            <EmptyCell key={`empty-${index}`} />
           ))}
 
           {days.map((day) => {
@@ -265,37 +269,20 @@ const Calendar = () => {
             return (
               <Day key={day} hasEvent={!!event}>
                 <DateNumber>{day}</DateNumber>
-                {event && <EventTitle>{event.title}</EventTitle>}
+                {event && (
+                  <EventTitle>{`${event.title} @ ${formatTime(event.time)}`}</EventTitle>
+                )}
               </Day>
             );
           })}
         </CalendarDays>
       </MainCalendar>
 
-      {/* Event List */}
       <EventList>
-        <h4>Events</h4>
-        {events.map((event, index) => (
-          <EventItem key={index}>
-            <strong>{event.title}</strong>
-            <span>{event.date}</span>
-            <RemoveButton onClick={() => removeEvent(index)}>Remove</RemoveButton>
-          </EventItem>
-        ))}
-
-        {/* Add New Event */}
         <AddEventForm>
-          <Input
-            type="date"
-            value={newEvent.date}
-            onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
-          />
-          <Input
-            type="text"
-            placeholder="Event Title"
-            value={newEvent.title}
-            onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-          />
+          <Input type="date" value={newEvent.date} onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })} />
+          <Input type="time" value={newEvent.time} onChange={(e) => setNewEvent({ ...newEvent, time: e.target.value })} />
+          <Input type="text" placeholder="Event Title" value={newEvent.title} onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })} />
           <Button onClick={addEvent}>Add Event</Button>
         </AddEventForm>
       </EventList>
