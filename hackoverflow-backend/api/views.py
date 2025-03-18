@@ -23,6 +23,8 @@ from pydub import AudioSegment
 import logging
 import traceback
 from googletrans import Translator
+import requests
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -205,14 +207,45 @@ def extract_audio_text(video_path, language='en'):
             logger.debug("Cleaned up temporary audio file")
 
 
-# Process video for emotion detection and speech-to-text conversion
+
+# Add this function to your views.py
+def query_mistral(prompt, api_key):
+    url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    data = {"inputs": prompt}
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        result = response.json()
+        # Extract only the generated text, assuming it's the first element
+        generated_text = result[0]['generated_text'].split('Solution:')[-1].strip() if result else "No response received."
+
+        # Format the generated text
+        if any(str(i) + "." in generated_text for i in range(1, 10)):
+            # If the text contains numbered points, split it into a list
+            formatted_text = "\n".join([point.strip() for point in generated_text.split("\n") if point.strip()])
+        else:
+            # Otherwise, keep it as a paragraph
+            formatted_text = generated_text
+
+        # # Append a positive note
+        # positive_note = "\n\nRemember, taking small steps each day can lead to big improvements. You're doing great!"
+        # formatted_text += positive_note
+
+        return formatted_text
+
+    except requests.exceptions.RequestException as e:
+        return f"Error: {e}"
+
+# Example usage in the upload_video function
 @api_view(['POST'])
 def upload_video(request):
     video_path = None
     try:
         file = request.FILES.get('file')
         language = request.data.get('language', 'en')  # Get language from request, default to English
-        
+
         if not file:
             return JsonResponse({"error": "No file provided"}, status=400)
 
@@ -238,10 +271,10 @@ def upload_video(request):
         # Check if facial expressions were detected
         valid_facial_data = len(frame_results) > 0
         video_stress_result = video_stress_result if valid_facial_data else "No facial expressions detected"
-        
+
         # Check if text was extracted
         valid_text_data = english_text and english_text != "No text detected" and not english_text.startswith("Error")
-        
+
         # Predict stress from extracted text
         if valid_text_data:
             text_sequence = text_tokenizer.texts_to_sequences([english_text])
@@ -267,12 +300,27 @@ def upload_video(request):
             if video_stress_result == "Stressed" and text_stress_result == "Stressed":
                 final_stress_decision = "Highly Stressed"
             elif video_stress_result == "Stressed" and text_stress_result == "Not Stressed":
-                final_stress_decision = "Moderate Stress"
+                final_stress_decision = "Not Stressed"
             elif video_stress_result == "Not Stressed" and text_stress_result == "Stressed":
                 final_stress_decision = "Moderate Stress"
             else:
                 final_stress_decision = "Not Stressed"
-            
+
+        # Query Mistral for suggestions
+        api_key = ""
+        if valid_text_data:
+            prompt = f"""
+            User Concern: {english_text}
+
+            Start with a motivational message to reassure the user. Then, provide only the practical solution to address the user's concern. Do not repeat the concern. Focus on actionable advice.
+
+            End your response with another positive, motivational message to uplift the user.
+            Solution:
+            """
+            mistral_response = query_mistral(prompt, api_key)
+        else:
+            mistral_response = "No suggestions available."
+
         # Print only the required values
         print(f"Final Stress Decision (Facial Expressions): {video_stress_result}")
         print(f"Final Stress Decision (Extracted Text): {text_stress_result}")
@@ -286,6 +334,7 @@ def upload_video(request):
             "Detected Language": detected_language,
             "Final Stress Decision (Facial Expressions)": video_stress_result,
             "Final Stress Decision (Extracted Text)": text_stress_result,
+            "Suggestions": mistral_response,
         }
 
         return JsonResponse(response_data)

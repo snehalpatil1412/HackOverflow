@@ -22,6 +22,506 @@ import {
 } from "@chakra-ui/react";
 
 
+
+
+
+const VideoPage = () => {
+  const navigate = useNavigate();
+  const videoRef = useRef(null);
+  const [videoBlob, setVideoBlob] = useState(null);
+  const [recording, setRecording] = useState(false);
+  const [showMainButtons, setShowMainButtons] = useState(true);
+  const [showRecordingScreen, setShowRecordingScreen] = useState(false);
+  const [showProcessButtons, setShowProcessButtons] = useState(false);
+  const [emotion, setEmotion] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [videos, setVideos] = useState([]);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunks = useRef([]);
+  const fileInputRef = useRef(null);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const modalSize = useBreakpointValue({ base: "full", md: "xl", lg: "2xl" });
+  const [language, setLanguage] = useState("en");
+  const [detectedLanguage, setDetectedLanguage] = useState("");
+  const [extractedText, setExtractedText] = useState("");
+  const [aiSuggestions, setAiSuggestions] = useState("");
+
+  // Available languages for speech recognition
+  const languages = [
+    { code: "en", name: "English" },
+    { code: "hi", name: "Hindi" },
+    { code: "mr", name: "Marathi" },
+    { code: "es", name: "Spanish" },
+    { code: "fr", name: "French" },
+    { code: "de", name: "German" },
+    { code: "zh-CN", name: "Chinese (Simplified)" },
+    { code: "ja", name: "Japanese" },
+    { code: "ru", name: "Russian" },
+    { code: "ar", name: "Arabic" },
+    { code: "pt", name: "Portuguese" },
+    { code: "it", name: "Italian" },
+    { code: "nl", name: "Dutch" },
+    { code: "ko", name: "Korean" },
+    { code: "ta", name: "Tamil" },
+    { code: "te", name: "Telugu" },
+  ];
+
+    useEffect(() => {
+    let interval;
+    if (recording) {
+      interval = setInterval(() => {
+        setRecordingTime((prevTime) => prevTime + 1);
+      }, 1000);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [recording]);
+
+  const youtubeVideos = [
+    {
+      id: 1,
+      title: "3-Minute Stress Management: Reduce Stress With This Short Activity",
+      url: "https://youtu.be/grfXR6FAsI8?si=Npm8XkqaYLTKe0Tz",
+      embedUrl: "https://www.youtube.com/embed/grfXR6FAsI8",
+      thumbnail: "https://img.youtube.com/vi/grfXR6FAsI8/0.jpg",
+    },
+    {
+      id: 2,
+      title:
+        "How to protect your brain from stress | Niki Korteweg | TEDxAmsterdamWomen",
+      url: "https://youtu.be/Nz9eAaXRzGg?si=B8RAdhiWiRo9CeAL",
+      embedUrl: "https://www.youtube.com/embed/Nz9eAaXRzGg",
+      thumbnail: "https://img.youtube.com/vi/Nz9eAaXRzGg/0.jpg",
+    },
+    {
+      id: 3,
+      title:
+        "How stress is killing us (and how you can stop it). | Thijs Launspach | TEDxUniversiteitVanAmsterdam",
+      url: "https://youtu.be/NyyPZJrDfkM?si=U0eZ_3Yl13hRd8fa",
+      embedUrl: "https://www.youtube.com/embed/NyyPZJrDfkM",
+      thumbnail: "https://img.youtube.com/vi/NyyPZJrDfkM/0.jpg",
+    },
+    {
+      id: 4,
+      title: "Stress relief tips",
+      url: "https://youtu.be/Q0m6MB7Dr30?si=DFjyiUFOp2imZULm",
+      embedUrl: "https://www.youtube.com/embed/Q0m6MB7Dr30",
+      thumbnail: "https://img.youtube.com/vi/Q0m6MB7Dr30/0.jpg",
+    },
+    {
+      id: 5,
+      title: "Hack for Headaches & Stress",
+      url: "https://youtube.com/shorts/_IfbUjoFdkk?si=Lb0-3tPn2vyCSwsn",
+      embedUrl: "https://www.youtube.com/embed/_IfbUjoFdkk",
+      thumbnail: "https://img.youtube.com/vi/_IfbUjoFdkk/0.jpg",
+    },
+    {
+      id: 6,
+      title: "Instant Anxiety Relief Point on Your Body | Dr. Meghana Dikshit",
+      url: "https://youtube.com/shorts/QPyNeGHlMao?si=y_IPkrmy9lKGARRi",
+      embedUrl: "https://www.youtube.com/embed/QPyNeGHlMao",
+      thumbnail: "https://img.youtube.com/vi/QPyNeGHlMao/0.jpg",
+    },
+    {
+      id: 7,
+      title: "The Science of Stress & How to Reduce It 5 Minute Stress Relief",
+      url: "https://youtube.com/shorts/f8BqU9wUbP0?si=PsZU0MSumvWHCGok",
+      embedUrl: "https://www.youtube.com/embed/f8BqU9wUbP0",
+      thumbnail: "https://img.youtube.com/vi/f8BqU9wUbP0/0.jpg",
+    },
+    {
+      id: 8,
+      title:
+        "Reduce stress and anxiety with these mind-quieting tips | How to stop overthinking | Anxiety relief",
+      url: "https://youtu.be/bsaOBWUqdCU?si=SaOP1WGjJLkZPdHP",
+      embedUrl: "https://www.youtube.com/embed/bsaOBWUqdCU",
+      thumbnail: "https://img.youtube.com/vi/bsaOBWUqdCU/0.jpg",
+    },
+    {
+      id: 9,
+      title: "10 Minute Guided Imagery for Reducing Stress and Anxiety",
+      url: "https://youtu.be/AbckuluEdM0?si=hc6dgs42rwCxgrpM",
+      embedUrl: "https://www.youtube.com/embed/AbckuluEdM0",
+      thumbnail: "https://img.youtube.com/vi/AbckuluEdM0/0.jpg",
+    },
+    {
+      id: 10,
+      title: "10 Minute Guided Imagery Meditation | City of Hope",
+      url: "https://youtu.be/t1rRo6cgM_E?si=5GRImKLS5JB--3VA",
+      embedUrl: "https://www.youtube.com/embed/t1rRo6cgM_E",
+      thumbnail: "https://img.youtube.com/vi/t1rRo6cgM_E/0.jpg",
+    },
+  ];
+
+  const shuffleArray = (array) => {
+    let shuffledArray = array.slice();
+    for (let i = shuffledArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledArray[i], shuffledArray[j]] = [shuffledArray[j], shuffledArray[i]];
+    }
+    return shuffledArray;
+  };
+
+  const handleStartRecordingScreen = () => {
+    setShowMainButtons(false);
+    setShowRecordingScreen(true);
+  };
+
+  const handleStartRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Your browser does not support video/audio recording. Please try a different browser.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      if (!videoRef.current) {
+        console.error("videoRef is not initialized.");
+        return;
+      }
+
+      videoRef.current.srcObject = stream;
+      videoRef.current.play();
+
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      recordedChunks.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunks.current.push(event.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(recordedChunks.current, { type: "video/webm" });
+        const videoUrl = URL.createObjectURL(blob);
+
+        videoRef.current.srcObject = null;
+        videoRef.current.src = videoUrl;
+        videoRef.current.controls = true;
+
+        setVideoBlob(blob);
+        setShowRecordingScreen(false);
+        setShowProcessButtons(true);
+      };
+
+      mediaRecorderRef.current.start();
+      setRecording(true);
+      setRecordingTime(0);
+    } catch (error) {
+      console.error("Error accessing camera/microphone:", error);
+      alert("Please allow camera & microphone access in your browser settings.");
+    }
+  };
+
+  const handleStopRecording = () => {
+    mediaRecorderRef.current.stop();
+    videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
+    setRecording(false);
+  };
+
+  const handleProcessVideo = async () => {
+    if (!videoBlob) return;
+
+    setIsProcessing(true);
+    const formData = new FormData();
+    formData.append("file", videoBlob);
+    formData.append("language", language); // Send the selected language to the backend
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/upload_video/", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      console.log("Response Data:", data);
+
+      setEmotion(data["Final Stress Decision"]);
+      setExtractedText(data["Extracted Text"]);
+      setDetectedLanguage(data["Detected Language"] || language);
+      if (data["Suggestions"]) {
+        setAiSuggestions(data["Suggestions"]); 
+      } else {
+        setAiSuggestions("No AI suggestions available.");
+      }
+      
+      // Remove the instruction part and format with Calmify signature
+      if (data["Suggestions"]) {
+        const suggestionText = data["Suggestions"];
+        // Extract just the advice part, removing instructions
+        const mainContent = suggestionText.split("Dear user,")[1] || suggestionText;
+        // Replace any closing like "Sincerely, your AI assistant" with "Sincerely, your Calmify"
+        const formattedText = mainContent.replace(/Sincerely,.*$/m, "Sincerely, your Calmify.");
+        setAiSuggestions(formattedText);
+      }
+      if (data["Final Stress Decision"] === "Highly Stressed" || data["Final Stress Decision"] === "Moderate Stress") {
+        const shuffledVideos = shuffleArray(youtubeVideos).slice(0, 3);
+        setVideos(shuffledVideos);
+
+        const videoSuggestions = shuffledVideos.map(video => ({
+          title: video.title,
+          url: video.url,
+        }));
+
+        await saveStressData("video", data["Extracted Text"], data["Final Stress Decision"], videoSuggestions, aiSuggestions);
+      }
+
+    } catch (error) {
+      console.error("Error processing video:", error);
+      setEmotion("Error detecting stress");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleUploadVideo = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const videoUrl = URL.createObjectURL(file);
+      videoRef.current.src = videoUrl;
+      videoRef.current.controls = true;
+      setVideoBlob(file);
+      setShowMainButtons(false);
+      setShowProcessButtons(true);
+    }
+  };
+
+  const handleOpenFileSystem = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleBack = () => {
+    setShowMainButtons(true);
+    setShowRecordingScreen(false);
+    setShowProcessButtons(false);
+    setVideoBlob(null);
+    setVideos([]);
+    setEmotion("");
+    setExtractedText("");
+    setDetectedLanguage("");
+    setAiSuggestions("");
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
+      videoRef.current.src = "";
+      videoRef.current.controls = false;
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  const openVideoModal = (video) => {
+    setSelectedVideo(video);
+    onOpen();
+  };
+
+  const navigateToGames = () => {
+    navigate("/games");
+  };
+
+  const navigateToMusic = () => {
+    navigate("/music");
+  };
+
+  const handleLanguageChange = (e) => {
+    setLanguage(e.target.value);
+  };
+
+  const suggestionsArray = aiSuggestions.split('\n');
+  const hasNumbers = suggestionsArray.some((s) => /^\d+\./.test(s)); 
+  
+  return (
+    <MainContainer>
+      {showMainButtons && (
+        <Container>
+          <TopContainer>
+            <Image src={videobg} alt="Video Emotion Detection Illustration" />
+          </TopContainer>
+          <LeftContainer>
+            <VHeading>Video Emotion Detection</VHeading>
+            <Description>
+              Use this feature to record or upload a video. It will analyze your emotions and help reduce stress through
+              personalized recommendations.
+            </Description>
+            
+            {/* Language Selection Dropdown */}
+            <FormControl mb={4}>
+              <FormLabel>Select Language for Speech Recognition</FormLabel>
+              <Select 
+                value={language} 
+                onChange={handleLanguageChange}
+                bg="white"
+                borderColor="#d1d1d1"
+                _hover={{ borderColor: "rgb(116, 63, 238)" }}
+              >
+                {languages.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </option>
+                ))}
+              </Select>
+            </FormControl>
+            
+            <ButtonGroup>
+              <Button onClick={handleStartRecordingScreen}>Record Video</Button>
+              <Button onClick={handleOpenFileSystem}>Upload Video</Button>
+            </ButtonGroup>
+            <HiddenInput type="file" accept="video/*" ref={fileInputRef} onChange={handleUploadVideo} />
+          </LeftContainer>
+          <RightContainer>
+            <Image src={videobg} alt="Video Emotion Detection Illustration" />
+          </RightContainer>
+        </Container>
+      )}
+
+      <RecordingContainer>
+        <VideoContainer show={!showMainButtons}>
+          <VideoElement ref={videoRef} autoPlay playsInline muted={recording}></VideoElement>
+          {recording && (
+            <Timer>
+              <RecordingDot />
+              {formatTime(recordingTime)}
+            </Timer>
+          )}
+        </VideoContainer>
+        {showRecordingScreen && (
+          <ButtonGroup>
+            <Button onClick={recording ? handleStopRecording : handleStartRecording}>
+              {recording ? "Stop Recording" : "Start Recording"}
+            </Button>
+            <Button onClick={handleBack}>Back</Button>
+          </ButtonGroup>
+        )}
+        {showProcessButtons && (
+          <ButtonGroup>
+            <Button onClick={handleProcessVideo}>Process Video</Button>
+            <Button onClick={handleBack}>Back</Button>
+          </ButtonGroup>
+        )}
+
+        {isProcessing && <ProcessingSpinner />}
+
+        {aiSuggestions && (
+          <EmotionFrame>
+            <Heading size="md" mb={4} color="rgb(108, 59, 222)">
+              Personalized Recommendations
+            </Heading>
+            <EmotionText hasNumbers={hasNumbers}>
+            <ul>
+          {suggestionsArray.map((suggestion, index) =>
+            suggestion.match(/^\d+\./) ? (
+              <li key={index}>{suggestion}</li>
+            ) : (
+              <Text key={index} as="p">
+                {suggestion}
+              </Text>
+            )
+          )}
+        </ul>
+            </EmotionText>
+          </EmotionFrame>
+        )}
+        {/* {extractedText && (
+          <EmotionFrame>
+            <Heading size="md" mb={4} color="rgb(108, 59, 222)">
+              Speech Recognition Results
+            </Heading>
+            <Text mb={2} fontWeight="bold">Detected Language: {detectedLanguage}</Text>
+            <EmotionText>
+              {extractedText}
+            </EmotionText>
+          </EmotionFrame>
+        )} */}
+        
+        {/* {emotion && (
+          <EmotionFrame>
+            <Heading size="md" mb={4} color="rgb(108, 59, 222)">
+              Recommendation Based on Your Results
+            </Heading>
+            {emotion === "Highly Stressed" || emotion === "Moderate Stress" ? (
+              <EmotionText>
+                It seems you're feeling {emotion}. No worries, we're here to help you relax and feel better! Here are some videos to calm your mind.
+              </EmotionText>
+            ) : (
+              <EmotionText>
+                You're doing great! Keep it up, and remember to take breaks when needed. Stay positive!
+              </EmotionText>
+            )}
+          </EmotionFrame>
+        )} */}
+
+        {videos.length > 0 && (
+          <VideoSection>
+            <VideoGrid>
+              {videos.map((video) => (
+                <GridItem key={video.id}>
+                  <VideoCard>
+                    <Thumbnail src={video.thumbnail} alt={video.title} />
+                    <VideoTitle>{video.title}</VideoTitle>
+                    <VideoLink onClick={() => openVideoModal(video)}>
+                      Watch Video
+                    </VideoLink>
+                  </VideoCard>
+                </GridItem>
+              ))}
+            </VideoGrid>
+
+            <GamesMusicContainer>
+              <GridItem>
+                <NavButton onClick={navigateToGames}>
+                  <Heading size="lg">Games</Heading>
+                  <Text mt={2}>Play stress-relief games</Text>
+                </NavButton>
+              </GridItem>
+              <GridItem>
+                <NavButton onClick={navigateToMusic}>
+                  <Heading size="lg">Music</Heading>
+                  <Text mt={2}>Listen to calming music</Text>
+                </NavButton>
+              </GridItem>
+            </GamesMusicContainer>
+          </VideoSection>
+        )}
+      </RecordingContainer>
+
+      <Modal isOpen={isOpen} onClose={onClose} size={modalSize} isCentered>
+        <ModalOverlay backdropFilter="blur(5px)" />
+        <ModalContent>
+          <ModalHeader>{selectedVideo?.title}</ModalHeader>
+
+          <ModalBody>
+            {selectedVideo && (
+              <AspectRatio ratio={16 / 9}>
+                <iframe
+                  title={selectedVideo.title}
+                  src={selectedVideo.embedUrl}
+                  allowFullScreen
+                />
+              </AspectRatio>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button colorScheme="blue" mr={3} onClick={onClose}>
+              Close
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    </MainContainer>
+  );
+};
+
+export default VideoPage;
+
+
 const spin = keyframes`
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
@@ -231,7 +731,7 @@ const EmotionFrame = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  text-align: center;
+  text-align: left;
   padding: 23px;
   background-color: #f8f9fa;
   border-radius: 12px;
@@ -250,7 +750,38 @@ const Image = styled.img`
 const EmotionText = styled.p`
   font-size: 18px;
   color: #333;
-  line-height: 1.8;
+  line-height: 1.6;
+
+  ul {
+    list-style-type: ${(props) => (props.hasNumbers ? 'none' : 'disc')};
+    padding: 0;
+  }
+
+  li {
+    // background: #f1f1f1;
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 4px;
+    position: relative;
+    padding-left: ${(props) => (props.hasNumbers ? '10px' : '25px')};
+  }
+
+  li::before {
+    content: ${(props) => (props.hasNumbers ? "''" : "'•'")};
+    color: #4caf50;
+    font-size: 24px;
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .motivation {
+    font-style: italic;
+    color: #555;
+    text-align: center;
+    margin-top: 20px;
+  }
 `;
 
 const HiddenInput = styled.input`
@@ -358,462 +889,3 @@ const VideoLink = styled.button`
     color: white;
   }
 `;
-
-
-const VideoPage = () => {
-  const navigate = useNavigate();
-  const videoRef = useRef(null);
-  const [videoBlob, setVideoBlob] = useState(null);
-  const [recording, setRecording] = useState(false);
-  const [showMainButtons, setShowMainButtons] = useState(true);
-  const [showRecordingScreen, setShowRecordingScreen] = useState(false);
-  const [showProcessButtons, setShowProcessButtons] = useState(false);
-  const [emotion, setEmotion] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [videos, setVideos] = useState([]);
-  const mediaRecorderRef = useRef(null);
-  const recordedChunks = useRef([]);
-  const fileInputRef = useRef(null);
-  const [selectedVideo, setSelectedVideo] = useState(null);
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const modalSize = useBreakpointValue({ base: "full", md: "xl", lg: "2xl" });
-  const [language, setLanguage] = useState("en");
-  const [detectedLanguage, setDetectedLanguage] = useState("");
-  const [extractedText, setExtractedText] = useState("");
-
-  // Available languages for speech recognition
-  const languages = [
-    { code: "en", name: "English" },
-    { code: "hi", name: "Hindi" },
-    { code: "mr", name: "Marathi" },
-    { code: "es", name: "Spanish" },
-    { code: "fr", name: "French" },
-    { code: "de", name: "German" },
-    { code: "zh-CN", name: "Chinese (Simplified)" },
-    { code: "ja", name: "Japanese" },
-    { code: "ru", name: "Russian" },
-    { code: "ar", name: "Arabic" },
-    { code: "pt", name: "Portuguese" },
-    { code: "it", name: "Italian" },
-    { code: "nl", name: "Dutch" },
-    { code: "ko", name: "Korean" },
-    { code: "ta", name: "Tamil" },
-    { code: "te", name: "Telugu" },
-  ];
-
-    useEffect(() => {
-    let interval;
-    if (recording) {
-      interval = setInterval(() => {
-        setRecordingTime((prevTime) => prevTime + 1);
-      }, 1000);
-    } else {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [recording]);
-
-  const youtubeVideos = [
-    {
-      id: 1,
-      title: "3-Minute Stress Management: Reduce Stress With This Short Activity",
-      url: "https://youtu.be/grfXR6FAsI8?si=Npm8XkqaYLTKe0Tz",
-      embedUrl: "https://www.youtube.com/embed/grfXR6FAsI8",
-      thumbnail: "https://img.youtube.com/vi/grfXR6FAsI8/0.jpg",
-    },
-    {
-      id: 2,
-      title:
-        "How to protect your brain from stress | Niki Korteweg | TEDxAmsterdamWomen",
-      url: "https://youtu.be/Nz9eAaXRzGg?si=B8RAdhiWiRo9CeAL",
-      embedUrl: "https://www.youtube.com/embed/Nz9eAaXRzGg",
-      thumbnail: "https://img.youtube.com/vi/Nz9eAaXRzGg/0.jpg",
-    },
-    {
-      id: 3,
-      title:
-        "How stress is killing us (and how you can stop it). | Thijs Launspach | TEDxUniversiteitVanAmsterdam",
-      url: "https://youtu.be/NyyPZJrDfkM?si=U0eZ_3Yl13hRd8fa",
-      embedUrl: "https://www.youtube.com/embed/NyyPZJrDfkM",
-      thumbnail: "https://img.youtube.com/vi/NyyPZJrDfkM/0.jpg",
-    },
-    {
-      id: 4,
-      title: "Stress relief tips",
-      url: "https://youtu.be/Q0m6MB7Dr30?si=DFjyiUFOp2imZULm",
-      embedUrl: "https://www.youtube.com/embed/Q0m6MB7Dr30",
-      thumbnail: "https://img.youtube.com/vi/Q0m6MB7Dr30/0.jpg",
-    },
-    {
-      id: 5,
-      title: "Hack for Headaches & Stress",
-      url: "https://youtube.com/shorts/_IfbUjoFdkk?si=Lb0-3tPn2vyCSwsn",
-      embedUrl: "https://www.youtube.com/embed/_IfbUjoFdkk",
-      thumbnail: "https://img.youtube.com/vi/_IfbUjoFdkk/0.jpg",
-    },
-    {
-      id: 6,
-      title: "Instant Anxiety Relief Point on Your Body | Dr. Meghana Dikshit",
-      url: "https://youtube.com/shorts/QPyNeGHlMao?si=y_IPkrmy9lKGARRi",
-      embedUrl: "https://www.youtube.com/embed/QPyNeGHlMao",
-      thumbnail: "https://img.youtube.com/vi/QPyNeGHlMao/0.jpg",
-    },
-    {
-      id: 7,
-      title: "The Science of Stress & How to Reduce It 5 Minute Stress Relief",
-      url: "https://youtube.com/shorts/f8BqU9wUbP0?si=PsZU0MSumvWHCGok",
-      embedUrl: "https://www.youtube.com/embed/f8BqU9wUbP0",
-      thumbnail: "https://img.youtube.com/vi/f8BqU9wUbP0/0.jpg",
-    },
-    {
-      id: 8,
-      title:
-        "Reduce stress and anxiety with these mind-quieting tips | How to stop overthinking | Anxiety relief",
-      url: "https://youtu.be/bsaOBWUqdCU?si=SaOP1WGjJLkZPdHP",
-      embedUrl: "https://www.youtube.com/embed/bsaOBWUqdCU",
-      thumbnail: "https://img.youtube.com/vi/bsaOBWUqdCU/0.jpg",
-    },
-    {
-      id: 9,
-      title: "10 Minute Guided Imagery for Reducing Stress and Anxiety",
-      url: "https://youtu.be/AbckuluEdM0?si=hc6dgs42rwCxgrpM",
-      embedUrl: "https://www.youtube.com/embed/AbckuluEdM0",
-      thumbnail: "https://img.youtube.com/vi/AbckuluEdM0/0.jpg",
-    },
-    {
-      id: 10,
-      title: "10 Minute Guided Imagery Meditation | City of Hope",
-      url: "https://youtu.be/t1rRo6cgM_E?si=5GRImKLS5JB--3VA",
-      embedUrl: "https://www.youtube.com/embed/t1rRo6cgM_E",
-      thumbnail: "https://img.youtube.com/vi/t1rRo6cgM_E/0.jpg",
-    },
-  ];
-
-  const shuffleArray = (array) => {
-    let shuffledArray = array.slice();
-    for (let i = shuffledArray.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffledArray[i], shuffledArray[j]] = [shuffledArray[j], shuffledArray[i]];
-    }
-    return shuffledArray;
-  };
-
-  const handleStartRecordingScreen = () => {
-    setShowMainButtons(false);
-    setShowRecordingScreen(true);
-  };
-
-  const handleStartRecording = async () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert("Your browser does not support video/audio recording. Please try a different browser.");
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      if (!videoRef.current) {
-        console.error("videoRef is not initialized.");
-        return;
-      }
-
-      videoRef.current.srcObject = stream;
-      videoRef.current.play();
-
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      recordedChunks.current = [];
-
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          recordedChunks.current.push(event.data);
-        }
-      };
-
-      mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(recordedChunks.current, { type: "video/webm" });
-        const videoUrl = URL.createObjectURL(blob);
-
-        videoRef.current.srcObject = null;
-        videoRef.current.src = videoUrl;
-        videoRef.current.controls = true;
-
-        setVideoBlob(blob);
-        setShowRecordingScreen(false);
-        setShowProcessButtons(true);
-      };
-
-      mediaRecorderRef.current.start();
-      setRecording(true);
-      setRecordingTime(0);
-    } catch (error) {
-      console.error("Error accessing camera/microphone:", error);
-      alert("Please allow camera & microphone access in your browser settings.");
-    }
-  };
-
-  const handleStopRecording = () => {
-    mediaRecorderRef.current.stop();
-    videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
-    setRecording(false);
-  };
-
-  const handleProcessVideo = async () => {
-    if (!videoBlob) return;
-
-    setIsProcessing(true);
-    const formData = new FormData();
-    formData.append("file", videoBlob);
-    formData.append("language", language); // Send the selected language to the backend
-
-    try {
-      const response = await fetch("http://127.0.0.1:8000/api/upload_video/", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-      console.log("Response Data:", data);
-
-      setEmotion(data["Final Stress Decision"]);
-      setExtractedText(data["Extracted Text"]);
-      setDetectedLanguage(data["Detected Language"] || language);
-
-      if (data["Final Stress Decision"] === "Highly Stressed" || data["Final Stress Decision"] === "Moderate Stress") {
-        const shuffledVideos = shuffleArray(youtubeVideos).slice(0, 3);
-        setVideos(shuffledVideos);
-
-        const videoSuggestions = shuffledVideos.map(video => ({
-          title: video.title,
-          url: video.url,
-        }));
-
-        await saveStressData("video", data["Extracted Text"], data["Final Stress Decision"], videoSuggestions);
-      }
-
-    } catch (error) {
-      console.error("Error processing video:", error);
-      setEmotion("Error detecting stress");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleUploadVideo = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const videoUrl = URL.createObjectURL(file);
-      videoRef.current.src = videoUrl;
-      videoRef.current.controls = true;
-      setVideoBlob(file);
-      setShowMainButtons(false);
-      setShowProcessButtons(true);
-    }
-  };
-
-  const handleOpenFileSystem = () => {
-    fileInputRef.current.click();
-  };
-
-  const handleBack = () => {
-    setShowMainButtons(true);
-    setShowRecordingScreen(false);
-    setShowProcessButtons(false);
-    setVideoBlob(null);
-    setVideos([]);
-    setEmotion("");
-    setExtractedText("");
-    setDetectedLanguage("");
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.srcObject = null;
-      videoRef.current.src = "";
-      videoRef.current.controls = false;
-    }
-  };
-
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  const openVideoModal = (video) => {
-    setSelectedVideo(video);
-    onOpen();
-  };
-
-  const navigateToGames = () => {
-    navigate("/games");
-  };
-
-  const navigateToMusic = () => {
-    navigate("/music");
-  };
-
-  const handleLanguageChange = (e) => {
-    setLanguage(e.target.value);
-  };
-
-
-  return (
-    <MainContainer>
-      {showMainButtons && (
-        <Container>
-          <TopContainer>
-            <Image src={videobg} alt="Video Emotion Detection Illustration" />
-          </TopContainer>
-          <LeftContainer>
-            <VHeading>Video Emotion Detection</VHeading>
-            <Description>
-              Use this feature to record or upload a video. It will analyze your emotions and help reduce stress through
-              personalized recommendations.
-            </Description>
-            
-            {/* Language Selection Dropdown */}
-            <FormControl mb={4}>
-              <FormLabel>Select Language for Speech Recognition</FormLabel>
-              <Select 
-                value={language} 
-                onChange={handleLanguageChange}
-                bg="white"
-                borderColor="#d1d1d1"
-                _hover={{ borderColor: "rgb(116, 63, 238)" }}
-              >
-                {languages.map((lang) => (
-                  <option key={lang.code} value={lang.code}>
-                    {lang.name}
-                  </option>
-                ))}
-              </Select>
-            </FormControl>
-            
-            <ButtonGroup>
-              <Button onClick={handleStartRecordingScreen}>Record Video</Button>
-              <Button onClick={handleOpenFileSystem}>Upload Video</Button>
-            </ButtonGroup>
-            <HiddenInput type="file" accept="video/*" ref={fileInputRef} onChange={handleUploadVideo} />
-          </LeftContainer>
-          <RightContainer>
-            <Image src={videobg} alt="Video Emotion Detection Illustration" />
-          </RightContainer>
-        </Container>
-      )}
-
-      <RecordingContainer>
-        <VideoContainer show={!showMainButtons}>
-          <VideoElement ref={videoRef} autoPlay playsInline muted={recording}></VideoElement>
-          {recording && (
-            <Timer>
-              <RecordingDot />
-              {formatTime(recordingTime)}
-            </Timer>
-          )}
-        </VideoContainer>
-        {showRecordingScreen && (
-          <ButtonGroup>
-            <Button onClick={recording ? handleStopRecording : handleStartRecording}>
-              {recording ? "Stop Recording" : "Start Recording"}
-            </Button>
-            <Button onClick={handleBack}>Back</Button>
-          </ButtonGroup>
-        )}
-        {showProcessButtons && (
-          <ButtonGroup>
-            <Button onClick={handleProcessVideo}>Process Video</Button>
-            <Button onClick={handleBack}>Back</Button>
-          </ButtonGroup>
-        )}
-
-        {isProcessing && <ProcessingSpinner />}
-        
-        {extractedText && (
-          <EmotionFrame>
-            <Heading size="md" mb={4} color="rgb(108, 59, 222)">
-              Speech Recognition Results
-            </Heading>
-            <Text mb={2} fontWeight="bold">Detected Language: {detectedLanguage}</Text>
-            <EmotionText>
-              {extractedText}
-            </EmotionText>
-          </EmotionFrame>
-        )}
-        
-        {emotion && (
-          <EmotionFrame>
-            <Heading size="md" mb={4} color="rgb(108, 59, 222)">
-              Recommendation Based on Your Results
-            </Heading>
-            {emotion === "Highly Stressed" || emotion === "Moderate Stress" ? (
-              <EmotionText>
-                It seems you're feeling {emotion}. No worries, we're here to help you relax and feel better! Here are some videos to calm your mind.
-              </EmotionText>
-            ) : (
-              <EmotionText>
-                You're doing great! Keep it up, and remember to take breaks when needed. Stay positive!
-              </EmotionText>
-            )}
-          </EmotionFrame>
-        )}
-
-        {videos.length > 0 && (
-          <VideoSection>
-            <VideoGrid>
-              {videos.map((video) => (
-                <GridItem key={video.id}>
-                  <VideoCard>
-                    <Thumbnail src={video.thumbnail} alt={video.title} />
-                    <VideoTitle>{video.title}</VideoTitle>
-                    <VideoLink onClick={() => openVideoModal(video)}>
-                      Watch Video
-                    </VideoLink>
-                  </VideoCard>
-                </GridItem>
-              ))}
-            </VideoGrid>
-
-            <GamesMusicContainer>
-              <GridItem>
-                <NavButton onClick={navigateToGames}>
-                  <Heading size="lg">Games</Heading>
-                  <Text mt={2}>Play stress-relief games</Text>
-                </NavButton>
-              </GridItem>
-              <GridItem>
-                <NavButton onClick={navigateToMusic}>
-                  <Heading size="lg">Music</Heading>
-                  <Text mt={2}>Listen to calming music</Text>
-                </NavButton>
-              </GridItem>
-            </GamesMusicContainer>
-          </VideoSection>
-        )}
-      </RecordingContainer>
-
-      <Modal isOpen={isOpen} onClose={onClose} size={modalSize} isCentered>
-        <ModalOverlay backdropFilter="blur(5px)" />
-        <ModalContent>
-          <ModalHeader>{selectedVideo?.title}</ModalHeader>
-
-          <ModalBody>
-            {selectedVideo && (
-              <AspectRatio ratio={16 / 9}>
-                <iframe
-                  title={selectedVideo.title}
-                  src={selectedVideo.embedUrl}
-                  allowFullScreen
-                />
-              </AspectRatio>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button colorScheme="blue" mr={3} onClick={onClose}>
-              Close
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    </MainContainer>
-  );
-};
-
-export default VideoPage;
