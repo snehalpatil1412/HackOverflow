@@ -243,10 +243,12 @@ const VideoPage = () => {
       setEmotion(data["Final Stress Decision"]);
       setExtractedText(data["Extracted Text"]);
       setDetectedLanguage(data["Detected Language"] || language);
-      setAiSuggestions(data["Suggestions"] || ""); 
+      if (data["Suggestions"]) {
+        setAiSuggestions(data["Suggestions"]); 
+      } else {
+        setAiSuggestions("No AI suggestions available.");
+      }
       
-
-
       // Remove the instruction part and format with Calmify signature
       if (data["Suggestions"]) {
         const suggestionText = data["Suggestions"];
@@ -265,7 +267,7 @@ const VideoPage = () => {
           url: video.url,
         }));
 
-        await saveStressData("video", data["Extracted Text"], data["Final Stress Decision"], videoSuggestions);
+        await saveStressData("video", data["Extracted Text"], data["Final Stress Decision"], videoSuggestions, aiSuggestions);
       }
 
     } catch (error) {
