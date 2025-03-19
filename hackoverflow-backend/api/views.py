@@ -307,7 +307,7 @@ def upload_video(request):
                 final_stress_decision = "Not Stressed"
 
         # Query Mistral for suggestions
-        api_key = "your_api_key"
+        api_key = "key"
         if valid_text_data:
             prompt = f"""
             User Concern: {english_text}
@@ -318,6 +318,15 @@ def upload_video(request):
             Solution:
             """
             mistral_response = query_mistral(prompt, api_key)
+            
+            # Translate suggestions back to the user's original language if not English
+            if language != 'en':
+                try:
+                    translated_suggestions = translator.translate(mistral_response, src='en', dest=language)
+                    mistral_response = translated_suggestions.text
+                except Exception as e:
+                    logger.error(f"Translation error for suggestions: {str(e)}")
+                    # Keep original English response in case of translation error
         else:
             mistral_response = "No suggestions available."
 
