@@ -2,302 +2,418 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { getDatabase, ref, set, onValue, remove } from 'firebase/database';
 import { auth } from '../../../firebaseConfig';  // Firebase config import
-
-
-
+import Delete from "../../../assets/trash.png"
+// Styled Components
 const CalendarContainer = styled.div`
   display: flex;
   height: 100vh;
-  font-family: Arial, sans-serif;
-  scroll-behavior: smooth;
-  transition: all 0.2s ease-in-out;
+  width: 100vw;
+  background-color: #ffffff;
+  overflow: hidden;
 `;
 
 const Sidebar = styled.div`
-  width: 200px;
-  background: linear-gradient(135deg, #8a6df1, #5748a6);
+  width: 220px;
+  background-color: #8e73be;
   color: white;
-  padding: 20px;
-  box-shadow: 4px 0 12px rgba(0, 0, 0, 0.1); 
-  transition: all 0.4s ease-in-out;
-  
-  &:hover {
-    background: linear-gradient(135deg, #6b54d3, #4e3c97);
-    box-shadow: 6px 0 18px rgba(0, 0, 0, 0.2);
-    transform: translateX(5px);
-  }
-
-  &:focus, &:active {
-    outline: none;
-    border: 2px solid #fff;
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.7);
-  }
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
 `;
 
 const SidebarTitle = styled.h3`
   text-align: center;
+  margin-bottom: 30px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 50px;
+
+`;
+
+const NavButton = styled.button`
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: none;
+  border-radius: 30%;
+  width: 35px;
+  height: 35px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+  
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
 `;
 
 const SidebarList = styled.ul`
   list-style: none;
   padding: 0;
+  // margin: 20px;
+  flex-grow: 1;
 `;
 
 const SidebarItem = styled.li`
-  padding: 10px;
+  padding: 10px 20px;
   cursor: pointer;
-  background: ${props => props.active ? '#5748a6' : 'transparent'};
+  background-color: ${props => props.active ? 'rgba(255, 255, 255, 0.2)' : 'transparent'};
+  transition: background-color 0.2s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 16px;
   
   &:hover {
-    background: #5748a6;
+    background-color: rgba(255, 255, 255, 0.1);
   }
 `;
 
 const EventCount = styled.span`
-  margin-left: 5px;
+  font-size: 14px;
+  opacity: 0.8;
 `;
 
+// const MonthNavigation = styled.div`
+//   position: absolute;
+//   top: 20px;
+//   right: 20px;
+//   display: flex;
+//   flex-direction: column;
+//   gap: 10px;
+// `;
+
+// const NavButton = styled.button`
+//   background-color: rgba(255, 255, 255, 0.2);
+//   color: white;
+//   border: none;
+//   border-radius: 50%;
+//   width: 26px;
+//   height: 26px;
+//   display: flex;
+//   align-items: center;
+//   justify-content: center;
+//   cursor: pointer;
+//   font-size: 14px;
+//   transition: background-color 0.2s;
+  
+//   &:hover {
+//     background-color: rgba(255, 255, 255, 0.3);
+//   }
+// `;
+
 const MainCalendar = styled.div`
-  flex: 1;
+  flex-grow: 1;
   padding: 20px;
-  background: #f5f5f5;
+  background-color: #f9f9f9;
 `;
 
 const CalendarHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
+  margin-bottom: 20px;
+  font-size: 18px;
+  font-weight: 500;
+  color: #333;
 `;
 
-const HeaderButton = styled.button`
-  background: #8a6df1;
+const AddEventButton = styled.button`
+  background-color: #8e73be;
   color: white;
   border: none;
-  padding: 8px 12px;
+  border-radius: 30%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  padding-top: 0px;
+  align-items: center;
+  text-align: center;
+  justify-content: center;
   cursor: pointer;
+  font-size: 25px;
+  transition: background-color 0.2s;
   
   &:hover {
-    background: #6b54d3;
+    background-color: #7b63a7;
   }
 `;
 
 const CalendarDays = styled.div`
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 10px;
+  gap: 30px;
+`;
+
+const DayHeader = styled.div`
+  text-align: center;
+  font-weight: 600;
+  color: #888;
+  padding: 10px 0;
+  font-size: 17px;
 `;
 
 const Day = styled.div`
+  background-color: white;
+  border-radius: 50%;
+  aspect-ratio: 1;
+  height: 55px;
+  width: 55px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
   align-items: center;
-  background: ${props => props.hasEvent ? '#ffdddd' : 'white'};
-  border: ${props => props.hasEvent ? '2px solid #ff7f7f' : '1px solid #ccc'};
-  padding: 20px;
-  height: 100px;
-  transition: 0.3s;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
   
-  &:hover {
-    background: ${props => props.hasEvent ? '#ffdddd' : '#eaeaea'};
-  }
-`;
-
-const DayHeader = styled(Day)`
-  background: #8a6df1;
-  color: white;
-  font-weight: bold;
-  height: auto;
-  padding: 10px;
-  
-  &:hover {
-    background: #8a6df1;
-  }
-`;
-
-const EmptyCell = styled(Day)`
-  background: #f9f9f9;
-  
-  &:hover {
-    background: #f9f9f9;
-  }
-`;
-const EventPopup = styled.div`
-  position: absolute;
-  background: white;
-  padding: 15px;
-  border-radius: 8px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-  transition: opacity 0.4s ease, transform 0.3s ease;
-  
-  &.entering {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  
-  &.entered {
-    opacity: 1;
-    transform: scale(1);
-  }
-  
-  &.exiting {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-`;
-
-const DateNumber = styled.div`
-  font-weight: bold;
-`;
-
-const EventTitle = styled.div`
-  margin-top: 5px;
-  background: #ffcc66;
-  color: #333;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: 0.3s;
-
-  &:hover {
-    background: #ffa500;
+  ${props => props.hasEvent && `
+    background-color: ${getRandomEventColor()};
     color: white;
+  `}
+  
+  &:hover {
+    background-color: ${props => props.hasEvent ? getRandomEventColor(true) : '#f0f0f0'};
   }
 `;
 
+const EmptyCell = styled.div`
+  aspect-ratio: 0;
+`;
+
+const DateNumber = styled.span`
+  font-size: 14px;
+  font-weight: 500;
+`;
 
 const EventList = styled.div`
-  width: 300px;
-  padding: 20px;
-  background: #f0f0f0;
-  border-left: 1px solid #ccc;
-  overflow-y: auto;
+  width: 430px;
+  background-color: white;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+`;
+const EventListHeader = styled.h3`
+  display: flex;
+  justify-content: flex-start;
+  padding: 8px;
+  margin-top: 18px;
+  font-size: 20px;
+`;
+
+const EventItems = styled.div`
+  padding: 0 16px 16px;
 `;
 
 const EventItem = styled.div`
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px;
-  margin: 5px 0;
-  background: white;
-  border: 1px solid #ccc;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+`;
+const EventDot = styled.div`
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: ${props => props.color};
+  margin-right: 12px;
+  margin-top: 5px;
 `;
 
-const RemoveButton = styled.button`
-  background: #ff4d4d;
-  color: white;
+const DeleteButton = styled.button`
+  background: none;
   border: none;
-  padding: 5px;
   cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  opacity: 0.7;
+
+   img {
+    width: 22px;  /* Increased image size */
+    height: 22px;  /* Increased image size */
+  }
   
   &:hover {
-    background: #ff1a1a;
+    opacity: 1;
+  }
+`;
+const EventDetails = styled.div`
+  flex: 1;
+`;
+
+const EventDateTime = styled.div`
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 2px;
+`;
+
+const EventName = styled.div`
+  font-size: 14px;
+  color: #333;
+`;
+
+const PriorityDots = styled.div`
+  color: #aaa;
+  font-size: 12px;
+  letter-spacing: 1px;
+`;
+
+const Modal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+`;
+
+const ModalContent = styled.div`
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  width: 400px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+`;
+
+const ModalHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  
+  h3 {
+    margin: 0;
+    color: #333;
+  }
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #888;
+  
+  &:hover {
+    color: #333;
+  }
+`;
+
+const Form = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+`;
+
+const Input = styled.input`
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  
+  &:focus {
+    outline: none;
+    border-color: #8e73be;
+  }
+`;
+
+const Button = styled.button`
+  background-color: #8e73be;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  
+  &:hover {
+    background-color: #7b63a7;
   }
 `;
 
 const Popup = styled.div`
   position: fixed;
-  background: #fff;
-  border: 1px solid #ccc;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  padding: 15px;
-  border-radius: 10px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  width: 300px;
+  max-height: 400px;
+  overflow-y: auto;
   z-index: 1000;
-  min-width: 280px;
-  max-width: 400px;
-  animation: fadeIn 0.3s ease-in-out;
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: scale(0.95);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
 `;
 
 const PopupHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #ddd;
-  margin-bottom: 10px;
-  padding-bottom: 8px;
-
+  padding: 10px 15px;
+  border-bottom: 1px solid #eee;
+  
   h4 {
-    font-size: 18px;
-    color: #333;
     margin: 0;
-  }
-`;
-
-const CloseButton = styled.button`
-  background: #ff4d4d;
-  color: white;
-  border: none;
-  padding: 4px 8px;
-  font-size: 14px;
-  cursor: pointer;
-  border-radius: 5px;
-  transition: background 0.3s;
-
-  &:hover {
-    background: #ff1a1a;
+    font-weight: 500;
   }
 `;
 
 const PopupContent = styled.div`
-  margin: 10px 0;
-  font-size: 14px;
-  color: #555;
-
-  strong {
-    color: #333;
-    font-weight: bold;
+  padding: 15px;
+  
+  p {
+    margin: 5px 0;
+    padding: 8px;
   }
 `;
 
-
-const AddEventForm = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 20px;
-`;
-
-const Input = styled.input`
-  padding: 10px;
-  border: 2px solid #8a6df1;
-  outline: none;
-`;
-
-const Button = styled.button`
-  padding: 10px;
-  border: 2px solid #8a6df1;
-  background: #8a6df1;
+const RemoveButton = styled.button`
+  background-color: #ff5252;
   color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
   cursor: pointer;
+  margin-top: 5px;
   
   &:hover {
-    background: #6b54d3;
+    background-color: #ff3232;
   }
 `;
 
+// Helper function to get random event colors similar to the image
+function getRandomEventColor(hover = false) {
+  const colors = [
+    '#6ed5cb', // teal
+    '#ff9f9f', // pink
+    '#ffd966', // yellow
+    '#b693d1', // purple
+    '#6fa8dc', // blue
+  ];
+  
+  const index = Math.floor(Math.random() * colors.length);
+  return hover ? colors[index] + 'dd' : colors[index];
+}
+
 const Calendar = () => {
-  const [clickedDate, setClickedDate] = useState(null);   // Stores the clicked date
-  const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });   // Position of the popup
+  const [clickedDate, setClickedDate] = useState(null);
+  const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
   const [newEvent, setNewEvent] = useState({ date: '', time: '', title: '' });
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     fetchEvents();
@@ -335,6 +451,7 @@ const Calendar = () => {
       eventTime: newEvent.time
     }).then(() => {
       setNewEvent({ date: '', time: '', title: '' });
+      setShowModal(false);
       fetchEvents();
     });
   };
@@ -357,10 +474,16 @@ const Calendar = () => {
 
   const days = Array.from({ length: daysInMonth(year, month) }, (_, i) => i + 1);
   const emptyCells = Array(firstDayOfMonth(year, month)).fill(null);
+  
+  // Get events for the current month
+  const currentMonthEvents = events.filter(event => {
+    const [eventYear, eventMonth] = event.eventDate.split('-').map(Number);
+    return eventYear === year && eventMonth === month + 1;
+  });
 
   return (
     <>
-      {/* 📌 Popup Section */}
+      {/* Popup Section */}
       {clickedDate && (
         <Popup
           style={{
@@ -392,9 +515,45 @@ const Calendar = () => {
         </Popup>
       )}
 
+      {/* Add Event Modal */}
+      {showModal && (
+        <Modal>
+          <ModalContent>
+            <ModalHeader>
+              <h3>Add New Event</h3>
+              <CloseButton onClick={() => setShowModal(false)}>×</CloseButton>
+            </ModalHeader>
+            <Form>
+              <Input 
+                type="date" 
+                value={newEvent.date} 
+                onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })} 
+              />
+              <Input 
+                type="time" 
+                value={newEvent.time} 
+                onChange={(e) => setNewEvent({ ...newEvent, time: e.target.value })} 
+              />
+              <Input 
+                type="text" 
+                placeholder="Event Title" 
+                value={newEvent.title} 
+                onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })} 
+              />
+              <Button onClick={addEvent}>Add Event</Button>
+            </Form>
+          </ModalContent>
+        </Modal>
+      )}
+
       <CalendarContainer>
         <Sidebar>
-          <SidebarTitle>{year}</SidebarTitle>
+        <SidebarTitle>
+          <NavButton onClick={() => setCurrentDate(new Date(year, month - 1, 1))}>{'<'}</NavButton>
+          {year}
+          <NavButton onClick={() => setCurrentDate(new Date(year, month + 1, 1))}>{'>'}</NavButton>
+        </SidebarTitle>
+
           <SidebarList>
             {[ 
               'January', 'February', 'March', 'April', 'May', 'June',
@@ -416,9 +575,8 @@ const Calendar = () => {
 
         <MainCalendar>
           <CalendarHeader>
-            <HeaderButton onClick={() => setCurrentDate(new Date(year, month - 1, 1))}>{'<'}</HeaderButton>
             <span>{monthName} {year}</span>
-            <HeaderButton onClick={() => setCurrentDate(new Date(year, month + 1, 1))}>{'>'}</HeaderButton>
+            <AddEventButton onClick={() => setShowModal(true)}>+</AddEventButton>
           </CalendarHeader>
 
           <CalendarDays>
@@ -437,15 +595,13 @@ const Calendar = () => {
               return (
                 <Day
                   key={day}
-                  hasEvent={dayEvents.length > 0}    // Highlight the day if it has events
+                  hasEvent={dayEvents.length > 0}
                   onClick={(e) => {
                     setClickedDate(formattedDate);    
                     setPopupPosition({ x: e.clientX, y: e.clientY });
                   }}
-                  style={{ cursor: 'pointer' }}
                 >
                   <DateNumber>{day}</DateNumber>
-                  {/* ✅ Removed the event text */}
                 </Day>
               );
             })}
@@ -453,30 +609,43 @@ const Calendar = () => {
         </MainCalendar>
 
         <EventList>
-          <AddEventForm>
-            <Input 
-              type="date" 
-              value={newEvent.date} 
-              onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })} 
-            />
-            <Input 
-              type="time" 
-              value={newEvent.time} 
-              onChange={(e) => setNewEvent({ ...newEvent, time: e.target.value })} 
-            />
-            <Input 
-              type="text" 
-              placeholder="Event Title" 
-              value={newEvent.title} 
-              onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })} 
-            />
-            <Button onClick={addEvent}>Add Event</Button>
-          </AddEventForm>
+          <EventListHeader>Events for {monthName}</EventListHeader>
+          <span></span>
+          
+          {currentMonthEvents.length > 0 ? (
+            <EventItems>
+              {currentMonthEvents.map((event, index) => {
+                const eventDate = new Date(event.eventDate);
+                const day = eventDate.getDate();
+                return (
+                  <EventItem key={index}>
+  <EventDot color={event.color || getRandomEventColor()} />
+  <EventDetails>
+    <EventDateTime>
+      {monthName} {day}, {event.eventTime}
+    </EventDateTime>
+    <EventName>{event.eventName}</EventName>
+  </EventDetails>
+  <PriorityDots>{event.priority}</PriorityDots>
+  <DeleteButton onClick={() => removeEvent(event.id)}>
+    <img 
+      src={Delete} 
+      alt="Delete" 
+      width="16" 
+      height="16" 
+    />
+  </DeleteButton>
+</EventItem>
+                );
+              })}
+            </EventItems>
+          ) : (
+            <p>No events for this month.</p>
+          )}
         </EventList>
       </CalendarContainer>
     </>
-);
-  
+  );
 };
 
 export default Calendar;
