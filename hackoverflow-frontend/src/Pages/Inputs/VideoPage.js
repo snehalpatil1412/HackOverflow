@@ -261,13 +261,22 @@ const VideoPage = () => {
       if (data["Final Stress Decision"] === "Highly Stressed" || data["Final Stress Decision"] === "Moderate Stress") {
         const shuffledVideos = shuffleArray(youtubeVideos).slice(0, 3);
         setVideos(shuffledVideos);
-
+      
         const videoSuggestions = shuffledVideos.map(video => ({
           title: video.title,
           url: video.url,
         }));
-
-        await saveStressData("video", data["Extracted Text"], data["Final Stress Decision"], videoSuggestions, aiSuggestions);
+        
+        // Format suggestions directly here instead of relying on state
+        let formattedSuggestions = "No AI suggestions available.";
+        if (data["Suggestions"]) {
+          const suggestionText = data["Suggestions"];
+          const mainContent = suggestionText.split("Dear user,")[1] || suggestionText;
+          formattedSuggestions = mainContent.replace(/Sincerely,.*$/m, "Sincerely, your Calmify.");
+        }
+        
+        // Use the formatted suggestions directly
+        await saveStressData("video", data["Extracted Text"], data["Final Stress Decision"], videoSuggestions, formattedSuggestions);
       }
 
     } catch (error) {
