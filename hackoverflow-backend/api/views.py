@@ -326,7 +326,7 @@ def upload_video(request):
                     mistral_response = translated_suggestions.text
                 except Exception as e:
                     logger.error(f"Translation error for suggestions: {str(e)}")
-                    # Keep original English response in case of translation error
+
         else:
             mistral_response = "No suggestions available."
 
