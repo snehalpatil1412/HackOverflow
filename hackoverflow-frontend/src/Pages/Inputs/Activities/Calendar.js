@@ -1,19 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { getDatabase, ref, set, onValue, remove } from 'firebase/database';
-import { auth } from '../../../firebaseConfig';  // Firebase config import
 
 const CalendarContainer = styled.div`
   display: flex;
   height: 100vh;
   font-family: Arial, sans-serif;
+  scroll-behavior: smooth;
+  transition: all 0.2s ease-in-out;
 `;
 
 const Sidebar = styled.div`
   width: 200px;
-  background: #8a6df1;
+  background: linear-gradient(135deg, #8a6df1, #5748a6);
   color: white;
   padding: 20px;
+  box-shadow: 4px 0 12px rgba(0, 0, 0, 0.1); 
+  transition: all 0.4s ease-in-out;
+  
+  &:hover {
+    background: linear-gradient(135deg, #6b54d3, #4e3c97);
+    box-shadow: 6px 0 18px rgba(0, 0, 0, 0.2);
+    transform: translateX(5px);
+  }
+
+  &:focus, &:active {
+    outline: none;
+    border: 2px solid #fff;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.7);
+  }
 `;
 
 const SidebarTitle = styled.h3`
@@ -105,6 +119,29 @@ const EmptyCell = styled(Day)`
     background: #f9f9f9;
   }
 `;
+const EventPopup = styled.div`
+  position: absolute;
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  transition: opacity 0.4s ease, transform 0.3s ease;
+  
+  &.entering {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  
+  &.entered {
+    opacity: 1;
+    transform: scale(1);
+  }
+  
+  &.exiting {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+`;
 
 const DateNumber = styled.div`
   font-weight: bold;
@@ -160,8 +197,6 @@ const RemoveButton = styled.button`
   }
 `;
 
-
-
 const AddEventForm = styled.div`
   display: flex;
   flex-direction: column;
@@ -188,6 +223,8 @@ const Button = styled.button`
 `;
 
 const Calendar = () => {
+  const [clickedDate, setClickedDate] = useState(null);   // Stores the clicked date
+  const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });   // Position of the popup
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
   const [newEvent, setNewEvent] = useState({ date: '', time: '', title: '' });
@@ -253,6 +290,7 @@ const Calendar = () => {
 
   return (
     <CalendarContainer>
+      {/* Sidebar */}
       <Sidebar>
         <SidebarTitle>{year}</SidebarTitle>
         <SidebarList>
@@ -265,55 +303,68 @@ const Calendar = () => {
               active={month === index}
               onClick={() => setCurrentDate(new Date(year, index, 1))}
             >
-              {name} <EventCount>({events.filter(event => {
-                const [eventYear, eventMonth] = event.eventDate.split('-').map(Number);
-                return eventYear === year && eventMonth === index + 1;
-              }).length})</EventCount>
+              {name} <EventCount>({getEventCountForMonth(year, index)})</EventCount>
             </SidebarItem>
           ))}
         </SidebarList>
       </Sidebar>
 
+      {/* Calendar Section */}
       <MainCalendar>
         <CalendarHeader>
-          <HeaderButton onClick={() => setCurrentDate(new Date(year, month - 1, 1))}>{'<'}</HeaderButton>
+          <HeaderButton onClick={prevMonth}>{'<'}</HeaderButton>
           <span>{monthName} {year}</span>
-          <HeaderButton onClick={() => setCurrentDate(new Date(year, month + 1, 1))}>{'>'}</HeaderButton>
+          <HeaderButton onClick={nextMonth}>{'>'}</HeaderButton>
         </CalendarHeader>
 
-        <CalendarDays>
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-            <DayHeader key={day}>{day}</DayHeader>
-          ))}
+          <CalendarDays>
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+              <DayHeader key={day}>{day}</DayHeader>
+            ))}
 
+          {/* Empty cells for the correct start day */}
           {emptyCells.map((_, index) => (
-            <EmptyCell key={`empty-${index}`} />
+            <EmptyCell key={`empty-${index}`}></EmptyCell>
           ))}
 
           {days.map((day) => {
-            const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const dayEvents = events.filter(event => event.eventDate === formattedDate);
-          
+            const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const event = events.find((e) => e.date === date);
+
             return (
-              <Day key={day} hasEvent={dayEvents.length > 0}>
+              <Day key={day} hasEvent={!!event}>
                 <DateNumber>{day}</DateNumber>
-                {dayEvents.map((event, index) => (
-                  <EventTitle key={index}>
-                    {event.eventName} @ {event.eventTime}
-                  </EventTitle>
-                ))}
+                {event && <EventTitle>{event.title}</EventTitle>}
               </Day>
             );
           })}
-
         </CalendarDays>
       </MainCalendar>
 
+      {/* Event List */}
       <EventList>
+        <h4>Events</h4>
+        {events.map((event, index) => (
+          <EventItem key={index}>
+            <strong>{event.title}</strong>
+            <span>{event.date}</span>
+            <RemoveButton onClick={() => removeEvent(index)}>Remove</RemoveButton>
+          </EventItem>
+        ))}
+
+        {/* Add New Event */}
         <AddEventForm>
-          <Input type="date" value={newEvent.date} onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })} />
-          <Input type="time" value={newEvent.time} onChange={(e) => setNewEvent({ ...newEvent, time: e.target.value })} />
-          <Input type="text" placeholder="Event Title" value={newEvent.title} onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })} />
+          <Input
+            type="date"
+            value={newEvent.date}
+            onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
+          />
+          <Input
+            type="text"
+            placeholder="Event Title"
+            value={newEvent.title}
+            onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+          />
           <Button onClick={addEvent}>Add Event</Button>
         </AddEventForm>
       </EventList>
