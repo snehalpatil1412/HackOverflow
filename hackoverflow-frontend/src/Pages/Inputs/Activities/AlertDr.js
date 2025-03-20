@@ -17,20 +17,35 @@ import {
   Container,
   Divider,
   useToast,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  HStack,
+  VStack,
+  ModalFooter,
+  Accordion,
+  AccordionItem,
+  AccordionButton,
+  AccordionPanel,
+  AccordionIcon,
+  Spinner,
 } from "@chakra-ui/react";
 import styled from "styled-components";
 import { auth } from "../../../firebaseConfig";
-import { getDatabase, ref, onValue, set } from "firebase/database";
+import { getDatabase, ref, onValue, set, push } from "firebase/database";
 import { useNavigate } from "react-router-dom";
 import CalmifyLogo from "../../../assets/logocalmify.png";
 
 const doctorsData = [
   {
     id: 1,
-    name: "Dr. John Doe",
+    name: "Dr. Snehal",
     specialization: "Cardiologist",
-    info: "Dr. John Doe is a renowned cardiologist with over 20 years of experience specializing in heart health and cardiovascular diseases.",
-    email: "snehalp1412@gmail.com",
+    info: "Dr. Snehal is a renowned cardiologist with over 20 years of experience specializing in heart health and cardiovascular diseases.",
+    email: "snehal@gmail.com",
     contact: "123-456-7890",
     address: "123 Main St, Anytown, USA",
     color: "red.400",
@@ -38,10 +53,10 @@ const doctorsData = [
   },
   {
     id: 2,
-    name: "Dr. Jane Smith",
+    name: "Dr. Sakshi",
     specialization: "Dermatologist",
-    info: "Dr. Jane Smith is a skilled dermatologist with a focus on skin health and cosmetic procedures.",
-    email: "sakshipatil0803@gmail.com",
+    info: "Dr. Sakshi is a skilled dermatologist with a focus on skin health and cosmetic procedures.",
+    email: "sakshi@gmail.com",
     contact: "987-654-3210",
     address: "456 Elm St, Anytown, USA",
     color: "green.400",
@@ -49,98 +64,10 @@ const doctorsData = [
   },
   {
     id: 3,
-    name: "Dr. Michael Chen",
+    name: "Dr. Aryan",
     specialization: "Psychiatrist",
-    info: "Dr. Michael Chen specializes in mental health counseling with expertise in anxiety, depression, and stress management.",
-    email: "michael.chen@example.com",
-    contact: "555-123-4567",
-    address: "789 Oak St, Anytown, USA",
-    color: "purple.400",
-    availability: "MON-THU: 8AM-7PM",
-  },
-  {
-    id: 4,
-    name: "Dr. Michael Chen",
-    specialization: "Psychiatrist",
-    info: "Dr. Michael Chen specializes in mental health counseling with expertise in anxiety, depression, and stress management.",
-    email: "michael.chen@example.com",
-    contact: "555-123-4567",
-    address: "789 Oak St, Anytown, USA",
-    color: "purple.400",
-    availability: "MON-THU: 8AM-7PM",
-  },
-  {
-    id: 5,
-    name: "Dr. Michael Chen",
-    specialization: "Psychiatrist",
-    info: "Dr. Michael Chen specializes in mental health counseling with expertise in anxiety, depression, and stress management.",
-    email: "michael.chen@example.com",
-    contact: "555-123-4567",
-    address: "789 Oak St, Anytown, USA",
-    color: "purple.400",
-    availability: "MON-THU: 8AM-7PM",
-  },
-  {
-    id: 5,
-    name: "Dr. Michael Chen",
-    specialization: "Psychiatrist",
-    info: "Dr. Michael Chen specializes in mental health counseling with expertise in anxiety, depression, and stress management.",
-    email: "michael.chen@example.com",
-    contact: "555-123-4567",
-    address: "789 Oak St, Anytown, USA",
-    color: "purple.400",
-    availability: "MON-THU: 8AM-7PM",
-  },
-  {
-    id: 5,
-    name: "Dr. Michael Chen",
-    specialization: "Psychiatrist",
-    info: "Dr. Michael Chen specializes in mental health counseling with expertise in anxiety, depression, and stress management.",
-    email: "michael.chen@example.com",
-    contact: "555-123-4567",
-    address: "789 Oak St, Anytown, USA",
-    color: "purple.400",
-    availability: "MON-THU: 8AM-7PM",
-  },
-  {
-    id: 5,
-    name: "Dr. Michael Chen",
-    specialization: "Psychiatrist",
-    info: "Dr. Michael Chen specializes in mental health counseling with expertise in anxiety, depression, and stress management.",
-    email: "michael.chen@example.com",
-    contact: "555-123-4567",
-    address: "789 Oak St, Anytown, USA",
-    color: "purple.400",
-    availability: "MON-THU: 8AM-7PM",
-  },
-  {
-    id: 5,
-    name: "Dr. Michael Chen",
-    specialization: "Psychiatrist",
-    info: "Dr. Michael Chen specializes in mental health counseling with expertise in anxiety, depression, and stress management.",
-    email: "michael.chen@example.com",
-    contact: "555-123-4567",
-    address: "789 Oak St, Anytown, USA",
-    color: "purple.400",
-    availability: "MON-THU: 8AM-7PM",
-  },
-  {
-    id: 5,
-    name: "Dr. Michael Chen",
-    specialization: "Psychiatrist",
-    info: "Dr. Michael Chen specializes in mental health counseling with expertise in anxiety, depression, and stress management.",
-    email: "michael.chen@example.com",
-    contact: "555-123-4567",
-    address: "789 Oak St, Anytown, USA",
-    color: "purple.400",
-    availability: "MON-THU: 8AM-7PM",
-  },
-  {
-    id: 5,
-    name: "Dr. Michael Chen",
-    specialization: "Psychiatrist",
-    info: "Dr. Michael Chen specializes in mental health counseling with expertise in anxiety, depression, and stress management.",
-    email: "michael.chen@example.com",
+    info: "Dr. Aryan specializes in mental health counseling with expertise in anxiety, depression, and stress management.",
+    email: "aryan@gmail.com",
     contact: "555-123-4567",
     address: "789 Oak St, Anytown, USA",
     color: "purple.400",
@@ -150,6 +77,24 @@ const doctorsData = [
 
 const getDoctorData = (doctorId) => {
   return doctorsData.find((doctor) => doctor.id === doctorId);
+};
+
+// Function to find doctor ID by email in Firebase
+const findDoctorIdByEmail = async (email) => {
+  const db = getDatabase();
+  const doctorRef = ref(db, 'doctor');
+  const snapshot = await onValue(doctorRef);
+  
+  if (snapshot.exists()) {
+    const doctors = snapshot.val();
+    for (const key in doctors) {
+      if (doctors[key].email === email) {
+        return key;
+      }
+    }
+  }
+  
+  return null;
 };
 
 const AlertDr = () => {
@@ -167,9 +112,20 @@ const AlertDr = () => {
     lastName: "",
     fullName: "",
   });
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState(null);
+  const [userRequests, setUserRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(true);
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       if (currentUser) {
+        // Save the current user ID for later use
+        setCurrentUserId(currentUser.uid);
+        setCurrentUserEmail(currentUser.email);
+
         // Fetch user details from Realtime Database
         const db = getDatabase();
         const userRef = ref(db, `users/${currentUser.uid}`);
@@ -213,11 +169,53 @@ const AlertDr = () => {
         );
 
         fetchStressCount(currentUser.uid);
+        fetchUserRequests(currentUser.uid);
       }
     });
 
     return () => unsubscribe();
   }, []);
+
+  const fetchUserRequests = (userId) => {
+    setLoadingRequests(true);
+    const db = getDatabase();
+    const requestsRef = ref(db, `users/${userId}/requests`);
+
+    onValue(
+      requestsRef,
+      (snapshot) => {
+        const data = snapshot.val();
+        const requestsList = [];
+        
+        if (data) {
+          // Convert object to array and add ID
+          Object.keys(data).forEach((key) => {
+            requestsList.push({
+              id: key,
+              ...data[key]
+            });
+          });
+          
+          // Sort by timestamp (newest first)
+          requestsList.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        }
+        
+        setUserRequests(requestsList);
+        setLoadingRequests(false);
+      },
+      (error) => {
+        console.error("Error fetching user requests:", error);
+        setLoadingRequests(false);
+        toast({
+          title: "Error",
+          description: "Failed to load your request history",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    );
+  };
 
   const fetchStressCount = (userId) => {
     const db = getDatabase();
@@ -303,7 +301,77 @@ const AlertDr = () => {
       .scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleSendMail = () => {
+  // Function to save request to Firebase
+  const saveRequestToFirebase = async (doctorEmail, subject, message) => {
+    try {
+      if (!currentUserId) {
+        throw new Error("User not authenticated");
+      }
+
+      const db = getDatabase();
+      const timestamp = new Date().toISOString();
+      const status = "pending"; // Initial status
+
+      // Find doctor ID by email
+      const doctorRef = ref(db, 'doctor');
+      let doctorId = null;
+      
+      await new Promise((resolve) => {
+        onValue(doctorRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const doctors = snapshot.val();
+            for (const key in doctors) {
+              if (doctors[key].email === doctorEmail) {
+                doctorId = key;
+                break;
+              }
+            }
+          }
+          resolve();
+        }, { onlyOnce: true });
+      });
+
+      if (!doctorId) {
+        throw new Error("Doctor not found in database");
+      }
+
+      // Create request data
+      const requestData = {
+        subject,
+        message,
+        timestamp,
+        status,
+        userEmail: currentUserEmail,
+        userName: userName.fullName,
+        doctorEmail,
+        stressCount: stressCount || 0
+      };
+
+      // Save to user's requests
+      const userRequestRef = ref(db, `users/${currentUserId}/requests`);
+      const newUserRequestRef = push(userRequestRef);
+      const requestId = newUserRequestRef.key;
+      
+      await set(newUserRequestRef, {
+        ...requestData,
+        doctorId
+      });
+
+      // Save to doctor's requests with the same ID
+      const doctorRequestRef = ref(db, `doctor/${doctorId}/requests/${requestId}`);
+      await set(doctorRequestRef, {
+        ...requestData,
+        userId: currentUserId
+      });
+
+      return true;
+    } catch (error) {
+      console.error("Error saving request to Firebase:", error);
+      throw error;
+    }
+  };
+
+  const handleSendMail = async () => {
     if (!doctorEmail || !subject || !message) {
       toast({
         title: "Missing information",
@@ -316,27 +384,42 @@ const AlertDr = () => {
       return;
     }
 
-    const to = encodeURIComponent(doctorEmail);
-    const subjectEncoded = encodeURIComponent(subject);
-    const bodyEncoded = encodeURIComponent(message);
+    try {
+      // First save to Firebase
+      await saveRequestToFirebase(doctorEmail, subject, message);
 
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${subjectEncoded}&body=${bodyEncoded}`;
-    const newWindow = window.open(gmailUrl, "_blank");
+      // Then open email client
+      const to = encodeURIComponent(doctorEmail);
+      const subjectEncoded = encodeURIComponent(subject);
+      const bodyEncoded = encodeURIComponent(message);
 
-    if (newWindow) {
-      const checkWindowClosed = setInterval(() => {
-        if (newWindow.closed) {
-          clearInterval(checkWindowClosed);
-          resetForm();
-          if (auth.currentUser) {
-            resetStressCount(auth.currentUser.uid);
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${subjectEncoded}&body=${bodyEncoded}`;
+      const newWindow = window.open(gmailUrl, "_blank");
+
+      if (newWindow) {
+        const checkWindowClosed = setInterval(() => {
+          if (newWindow.closed) {
+            clearInterval(checkWindowClosed);
+            resetForm();
+            if (auth.currentUser) {
+              resetStressCount(auth.currentUser.uid);
+            }
           }
-        }
-      }, 500);
-    } else {
+        }, 500);
+      } else {
+        toast({
+          title: "Popup blocked",
+          description: "Please allow popups for this site to send email",
+          status: "error",
+          duration: 4000,
+          isClosable: true,
+          position: "top",
+        });
+      }
+    } catch (error) {
       toast({
-        title: "Popup blocked",
-        description: "Please allow popups for this site to send email",
+        title: "Error",
+        description: `Failed to save request: ${error.message}`,
         status: "error",
         duration: 4000,
         isClosable: true,
@@ -355,6 +438,34 @@ const AlertDr = () => {
     setMessage("");
   };
 
+  const getStatusBadge = (status) => {
+    switch(status) {
+      case 'pending':
+        return <Badge colorScheme="yellow">Pending</Badge>;
+      case 'accepted':
+        return <Badge colorScheme="green">Accepted</Badge>;
+      case 'rejected':
+        return <Badge colorScheme="red">Rejected</Badge>;
+      default:
+        return <Badge colorScheme="gray">{status}</Badge>;
+    }
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleString();
+  };
+
+  const handleViewRequest = (request) => {
+    setSelectedRequest(request);
+    setRequestModalOpen(true);
+  };
+
+  const handleCloseRequestModal = () => {
+    setRequestModalOpen(false);
+    setSelectedRequest(null);
+  };
+
   return (
     <Container maxW="100%" p={0}>
       <StyledNav>
@@ -363,49 +474,99 @@ const AlertDr = () => {
         </Logo>
       </StyledNav>
       <MainContainer>
-        <Mailtemp id="email-form">
-          <Heading as="h2" size="lg" mb={4}>
-            Request Appointment
-          </Heading>
-          <EmailForm>
-            <FormField>
-              <Label htmlFor="doctor-email">Doctor's Email</Label>
-              <DrMailid
-                id="doctor-email"
-                placeholder="Select a doctor first"
-                value={doctorEmail}
-                readOnly
-              />
-            </FormField>
+        <LeftColumn>
+          <Mailtemp id="email-form">
+            <Heading as="h2" size="lg" mb={4}>
+              Request Appointment
+            </Heading>
+            <EmailForm>
+              <FormField>
+                <Label htmlFor="doctor-email">Doctor's Email</Label>
+                <DrMailid
+                  id="doctor-email"
+                  placeholder="Select a doctor first"
+                  value={doctorEmail}
+                  readOnly
+                />
+              </FormField>
 
-            <FormField>
-              <Label htmlFor="subject">Subject</Label>
-              <Subject
-                id="subject"
-                placeholder="Enter email subject"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-              />
-            </FormField>
+              <FormField>
+                <Label htmlFor="subject">Subject</Label>
+                <Subject
+                  id="subject"
+                  placeholder="Enter email subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                />
+              </FormField>
 
-            <FormField>
-              <Label htmlFor="message">Message</Label>
-              <TextArea
-                id="message"
-                placeholder="Explain your concerns and request appointment or any doubt related to your mental health..."
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-              />
-            </FormField>
+              <FormField>
+                <Label htmlFor="message">Message</Label>
+                <TextArea
+                  id="message"
+                  placeholder="Explain your concerns and request appointment or any doubt related to your mental health..."
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                />
+              </FormField>
 
-            <SubmitButton
-              onClick={handleSendMail}
-              disabled={mailSent || !doctorEmail}
-            >
-              {mailSent ? "Email Sent ✓" : "Send Email"}
-            </SubmitButton>
-          </EmailForm>
-        </Mailtemp>
+              <SubmitButton
+                onClick={handleSendMail}
+                disabled={mailSent || !doctorEmail}
+              >
+                {mailSent ? "Email Sent ✓" : "Send Email"}
+              </SubmitButton>
+            </EmailForm>
+          </Mailtemp>
+
+          {/* Request History Section */}
+          <RequestHistorySection>
+            <Heading as="h2" size="lg" mb={4}>
+              Your Request History
+            </Heading>
+            {loadingRequests ? (
+              <Flex justify="center" py={10}>
+                <Spinner size="xl" />
+              </Flex>
+            ) : userRequests.length === 0 ? (
+              <Text textAlign="center" py={10} color="gray.500">
+                No appointment requests found
+              </Text>
+            ) : (
+              <Box overflowX="auto">
+                <Table variant="simple" size="sm">
+                  <Thead>
+                    <Tr>
+                      <Th>Doctor</Th>
+                      <Th>Date</Th>
+                      <Th>Status</Th>
+                      <Th>Action</Th>
+                    </Tr>
+                  </Thead>
+                  <Tbody>
+                    {userRequests.map((request) => (
+                      <Tr key={request.id}>
+                        <Td>{request.doctorEmail}</Td>
+                        <Td>{formatDate(request.timestamp)}</Td>
+                        <Td>{getStatusBadge(request.status)}</Td>
+                        <Td>
+                          <Button
+                            size="xs"
+                            colorScheme="blue"
+                            onClick={() => handleViewRequest(request)}
+                          >
+                            View
+                          </Button>
+                        </Td>
+                      </Tr>
+                    ))}
+                  </Tbody>
+                </Table>
+              </Box>
+            )}
+          </RequestHistorySection>
+        </LeftColumn>
+
         <DoctorListContainer>
           <ResponsiveStack spacing={4}>
             {doctorsData.map((doctor) => (
@@ -501,6 +662,76 @@ const AlertDr = () => {
           </ModalBody>
         </ModalContent>
       </Modal>
+
+      {/* Request Detail Modal */}
+      <Modal isOpen={requestModalOpen} onClose={handleCloseRequestModal} size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            Request Details
+            <Text fontSize="sm" fontWeight="normal" mt={1}>
+              {selectedRequest && formatDate(selectedRequest.timestamp)}
+            </Text>
+          </ModalHeader>
+          <ModalCloseButton />
+          
+          <ModalBody pb={6}>
+            {selectedRequest && (
+              <VStack align="stretch" spacing={4}>
+                <HStack>
+                  <Text fontWeight="bold">Status:</Text>
+                  <Box>{getStatusBadge(selectedRequest.status)}</Box>
+                </HStack>
+                
+                <Box>
+                  <Text fontWeight="bold">To:</Text>
+                  <Text>{selectedRequest.doctorEmail}</Text>
+                </Box>
+                
+                <Box>
+                  <Text fontWeight="bold">Subject:</Text>
+                  <Text>{selectedRequest.subject}</Text>
+                </Box>
+                
+                <Box>
+                  <Text fontWeight="bold">Message:</Text>
+                  <Box p={3} bg="gray.50" borderRadius="md" whiteSpace="pre-wrap">
+                    {selectedRequest.message}
+                  </Box>
+                </Box>
+
+                {selectedRequest.status === 'accepted' && (
+                  <Box p={3} bg="green.50" borderRadius="md">
+                    <Text fontWeight="bold" color="green.700">
+                      Your appointment request has been accepted!
+                    </Text>
+                    <Text color="green.700" mt={2}>
+                      Please check your email for further communication from the doctor regarding appointment details.
+                    </Text>
+                  </Box>
+                )}
+
+                {selectedRequest.status === 'rejected' && (
+                  <Box p={3} bg="red.50" borderRadius="md">
+                    <Text fontWeight="bold" color="red.700">
+                      Your appointment request was declined.
+                    </Text>
+                    <Text color="red.700" mt={2}>
+                      You can try requesting an appointment with another doctor or at a different time.
+                    </Text>
+                  </Box>
+                )}
+              </VStack>
+            )}
+          </ModalBody>
+
+          <ModalFooter>
+            <Button colorScheme="blue" onClick={handleCloseRequestModal}>
+              Close
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Container>
   );
 };
@@ -549,29 +780,35 @@ const MainContainer = styled.div`
   }
 `;
 
+// New styled component for the left column (containing both the email form and request history)
+const LeftColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+
+  @media (min-width: 1024px) {
+    width: 450px;
+  }
+`;
+
 const Mailtemp = styled.div`
   width: 100%;
   background: white;
   padding: 20px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 10;
+  border-radius: 8px;
+`;
 
-  @media (min-width: 1024px) {
-    position: sticky;
-    top: 20px;
-    width: 450px; /* Fixed width on larger screens */
-    align-self: flex-start;
-    margin-right: 40px;
-    max-height: calc(100vh - 100px);
-    overflow-y: auto;
-  }
-
-  /*
-  @media (max-width: 1023px) {
-    position: static;
-    box-shadow: none;
-    padding: 10px;
-  }*/
+// New styled component for the request history section
+const RequestHistorySection = styled.div`
+  width: 100%;
+  background: white;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  border-radius: 8px;
 `;
 
 const DoctorListContainer = styled.div`
@@ -580,7 +817,7 @@ const DoctorListContainer = styled.div`
   overflow-y: auto;
   max-height: calc(100vh - 120px);
 
-  @media (min-width: 640px) {
+  @media (min-width: 1024px) {
     max-height: calc(100vh - 200px);
     margin-left: 40px;
     padding-right: 20px;
