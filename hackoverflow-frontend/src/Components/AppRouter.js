@@ -19,6 +19,8 @@ import SignupPage from "../Pages/Authentication/SigupPage";
 // import QuizPage from "../Pages/Inputs/QuizPage";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import LoaderComponent from "./Loader";
+import DrLogin from "../Pages/Authentication/DrLogin";
+import DrDashboard from "../Pages/DrDashboard/DrDashboard";
 
 export default function AppRouter() {
   const [user, setUser] = useState(null);
@@ -53,6 +55,8 @@ export default function AppRouter() {
         <Route path="/mindful" element={<MindfulActivity />} />
         <Route path="/alertDr" element={<AlertDr />} />
         <Route path="/calendar" element={<Calendar />} />
+        <Route path="/drlogin" element={<DrLogin />} />
+        <Route path="/drdashboard" element={<DrDashboard />} />
 
       </Routes>
     </Router>
