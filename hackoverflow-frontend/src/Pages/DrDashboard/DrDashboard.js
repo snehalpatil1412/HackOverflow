@@ -1,10 +1,12 @@
 // DrDashboard.js
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { format } from "date-fns"; // For formatting date & time
 import {
   Box,
   Heading,
   Text,
+  Input,
   Button,
   Container,
   VStack,
@@ -29,7 +31,7 @@ import {
   useDisclosure,
   Spinner,
 } from '@chakra-ui/react';
-import { getDatabase, ref, onValue, update, remove } from 'firebase/database';
+import { getDatabase, set, ref, onValue, update, remove } from 'firebase/database';
 
 const DrDashboard = () => {
   const [user, setUser] = useState(null);
@@ -39,6 +41,13 @@ const DrDashboard = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const navigate = useNavigate();
   const toast = useToast();
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedRequestId, setSelectedRequestId] = useState(null);
+  const [isReschedule, setIsReschedule] = useState(false);
+  const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
     // Check if user is logged in
@@ -62,6 +71,22 @@ const DrDashboard = () => {
 
     // Fetch doctor's requests from Firebase
     fetchDoctorRequests(userData.id);
+    if (notifications.length > 0) {
+      notifications.forEach((notif) => {
+        toast({
+          title: "Appointment Canceled",
+          description: notif.message,
+          status: "warning",
+          duration: 4000,
+          isClosable: true,
+        });
+      });
+  
+      // Clear notifications from Firebase after showing them
+      const db = getDatabase();
+      remove(ref(db, `doctor/${user.id}/notifications`));
+      setNotifications([]);
+    }
   }, [navigate, toast]);
 
   const fetchDoctorRequests = (doctorId) => {
@@ -127,34 +152,22 @@ const DrDashboard = () => {
     return date.toLocaleString();
   };
 
-  const handleAcceptRequest = async (requestId, userId) => {
+  const handleAcceptRequest = async (requestId, userId, isReschedule = false) => {
     try {
       const db = getDatabase();
-      
-      // Update status in doctor's requests
-      const doctorRequestRef = ref(db, `doctor/${user.id}/requests/${requestId}`);
-      await update(doctorRequestRef, { status: 'accepted' });
-      
-      // Update status in user's requests
-      const userRequestRef = ref(db, `users/${userId}/requests/${requestId}`);
-      await update(userRequestRef, { status: 'accepted' });
-      
-      toast({
-        title: 'Request accepted',
-        description: 'The patient has been notified',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      
-      // Close modal if open
-      if (isOpen) onClose();
+  
+      // Store request details for scheduling
+      setSelectedUserId(userId);
+      setSelectedRequestId(requestId);
+      setIsScheduleOpen(true); // Open scheduling modal
+      setIsReschedule(isReschedule);
+  
     } catch (error) {
       console.error("Error accepting request:", error);
       toast({
-        title: 'Error',
+        title: "Error",
         description: error.message,
-        status: 'error',
+        status: "error",
         duration: 3000,
         isClosable: true,
       });
@@ -209,6 +222,92 @@ const DrDashboard = () => {
   };
 
   if (!user) return null;
+  
+
+  const scheduleAppointment = async () => {
+    if (!selectedDate || !selectedTime) {
+      toast({
+        title: "Please select a date and time",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+  
+    try {
+      const db = getDatabase();
+      const formattedDateTime = `${selectedDate} ${selectedTime}`;
+      
+      if (isReschedule) {
+        // Delete the old event from Firebase before updating
+        const eventRef = ref(db, `users/${selectedUserId}/events/${selectedRequestId}`);
+        await remove(eventRef);
+  
+        // Update the new event details
+        await set(eventRef, {
+          eventName: "Doctor Consultation",
+          eventDate: selectedDate,
+          eventTime: selectedTime,
+          status: "rescheduled",
+        });
+  
+        await update(ref(db, `users/${selectedUserId}/requests/${selectedRequestId}`), {
+          meetingTime: formattedDateTime,
+        });
+  
+        await update(ref(db, `doctor/${user.id}/requests/${selectedRequestId}`), {
+          meetingTime: formattedDateTime,
+        });
+  
+        toast({
+          title: "Meeting Rescheduled",
+          description: "New date and time have been updated.",
+          status: "info",
+          duration: 3000,
+          isClosable: true,
+        });
+      } else {
+        // Schedule for the first time
+        await set(ref(db, `users/${selectedUserId}/events/${selectedRequestId}`), {
+          eventName: "Doctor Consultation",
+          eventDate: selectedDate,
+          eventTime: selectedTime,
+          status: "scheduled",
+        });
+  
+        await update(ref(db, `users/${selectedUserId}/requests/${selectedRequestId}`), {
+          status: "accepted",
+          meetingTime: formattedDateTime,
+        });
+  
+        await update(ref(db, `doctor/${user.id}/requests/${selectedRequestId}`), {
+          status: "accepted",
+          meetingTime: formattedDateTime,
+        });
+  
+        toast({
+          title: "Appointment Scheduled",
+          description: "Meeting has been added to the user's calendar",
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+  
+      setIsScheduleOpen(false);
+    } catch (error) {
+      console.error("Error scheduling appointment:", error);
+      toast({
+        title: "Error",
+        description: error.message,
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+  
 
   return (
     <Container maxW="container.xl" py={10}>
@@ -306,6 +405,16 @@ const DrDashboard = () => {
                               </Button>
                             </>
                           )}
+
+                          {request.status === 'accepted' && (
+                            <Button 
+                              size="xs" 
+                              colorScheme="orange"
+                              onClick={() => handleAcceptRequest(request.id, request.userId, true)}
+                            >
+                              Reschedule
+                            </Button>
+                          )}
                         </HStack>
                       </Td>
                     </Tr>
@@ -394,6 +503,32 @@ const DrDashboard = () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
+      <Modal isOpen={isScheduleOpen} onClose={() => setIsScheduleOpen(false)}>
+  <ModalOverlay />
+  <ModalContent>
+    <ModalHeader>Schedule Video Consultation</ModalHeader>
+    <ModalCloseButton />
+    <ModalBody>
+      <VStack spacing={4}>
+        <Input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+        />
+        <Input
+          type="time"
+          value={selectedTime}
+          onChange={(e) => setSelectedTime(e.target.value)}
+        />
+      </VStack>
+    </ModalBody>
+    <ModalFooter>
+      <Button colorScheme="blue" onClick={scheduleAppointment}>
+        Confirm & Schedule
+      </Button>
+    </ModalFooter>
+  </ModalContent>
+</Modal>
     </Container>
   );
 };
