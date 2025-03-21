@@ -7,6 +7,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import {useToast} from '@chakra-ui/react';
 import Peer from 'peerjs';
 import io from 'socket.io-client';
+
 // Helper function to get random event colors similar to the image
 function getRandomEventColor(hover = false) {
   const colors = [
@@ -20,6 +21,12 @@ function getRandomEventColor(hover = false) {
   const index = Math.floor(Math.random() * colors.length);
   return hover ? colors[index] + 'dd' : colors[index];
 }
+
+// Define fixed colors for different event types
+const EVENT_COLORS = {
+  userCreated: '#6ed5cb',  // teal for user-created events
+  doctorCreated: '#b693d1' // purple for doctor-created events
+};
 
 const socket = io('https://socketio-chat-h9jt.herokuapp.com/');
 
@@ -93,8 +100,10 @@ const Calendar = () => {
   const [activeMeeting, setActiveMeeting] = useState(null); // Track active meeting
   const [meetingStates, setMeetingStates] = useState({}); // Track canJoin for each event
   const peerInstance = useRef(null);
-const [pc, setPc] = useState(null);  
-
+  const [pc, setPc] = useState(null);  
+  // Add these state variables with your other state declarations
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [eventToDelete, setEventToDelete] = useState({ id: null, createdBy: null });
 
   useEffect(() => {
     const initialize = async () => {
@@ -103,55 +112,25 @@ const [pc, setPc] = useState(null);
         const db = await initializeIndexedDB();
         const registration = await registerServiceWorker();
         setSwRegistration(registration);
-
+  
         fetchEvents();
-
-        // ✅ Get user media (camera + mic)
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        setMyStream(stream);
-
-        // ✅ Initialize WebRTC
+  
+        // REMOVED: Don't initialize media here
+        // Instead of initializing WebRTC here, set up a basic peer connection configuration
         const newPc = new RTCPeerConnection({
           iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
         });
         setPc(newPc);
-
-        stream.getTracks().forEach(track => newPc.addTrack(track, stream));
-
-        newPc.ontrack = event => {
-          setRemoteStream(event.streams[0]);
-        };
-
-        newPc.onicecandidate = event => {
-          if (event.candidate) {
-            set(ref(getDatabase(), `calls/${activeMeeting}/receiverCandidate`), event.candidate);
-          }
-        };
-
-        // ✅ Listen for Doctor's Meeting Start in Firebase
-        const meetingRef = ref(getDatabase(), "calls/");
-        onValue(meetingRef, (snapshot) => {
-          if (snapshot.exists()) {
-            setMeetingStates(prev => ({
-              ...prev,
-              [snapshot.key]: { canJoin: true }
-            }));
-            toast({
-              title: "Meeting Started",
-              description: "Doctor has started the meeting. You can join now.",
-              status: "info",
-              duration: 5000,
-              isClosable: true,
-            });
-          }
-        });
-
+  
+        // Listen for Doctor's Meeting Start in Firebase
+        const unsubscribe = listenForDoctorMeetings();
+  
         const intervalId = setInterval(checkUpcomingEvents, 60000);
-
+  
         return () => {
           clearInterval(intervalId);
           if (newPc) newPc.close();
-          if (myStream) myStream.getTracks().forEach(track => track.stop());
+          unsubscribe(); // Cleanup Firebase listener
         };
       } catch (error) {
         console.error('Error during initialization:', error);
@@ -160,10 +139,56 @@ const [pc, setPc] = useState(null);
     
     initialize();
   }, []);
+  
 
+  // Listen for active meetings from doctors
+  const listenForDoctorMeetings = () => {
+    const db = getDatabase();
+    const callsRef = ref(db, "calls/");
+    
+    // Track meetings we've already notified about
+    const notifiedMeetings = new Set();
+    
+    const listener = onValue(callsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const calls = snapshot.val();
+        const updatedMeetingStates = { ...meetingStates };
+        
+        // Process each call
+        Object.keys(calls).forEach(callId => {
+          // If there's an offer, it means the doctor has started the meeting
+          if (calls[callId] && calls[callId].offer) {
+            updatedMeetingStates[callId] = { 
+              canJoin: true,
+            };
+            
+            // Show toast only for newly started meetings that we haven't notified about yet
+            if (!meetingStates[callId]?.canJoin && !notifiedMeetings.has(callId)) {
+              notifiedMeetings.add(callId); // Mark as notified
+              toast({
+                title: "Meeting Started",
+                description: "Doctor has started the meeting. You can join now.",
+                status: "info",
+                duration: 5000,
+                isClosable: true,
+              });
+            }
+          }
+        });
+        
+        setMeetingStates(updatedMeetingStates);
+      }
+    });
+    
+    // Return unsubscribe function for cleanup
+    return () => listener();
+  };
 
   const joinMeet = async (requestId) => {
     try {
+      setActiveMeeting(requestId); // Set active meeting ID
+      
+      // Only request media when actually joining a meeting
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setMyStream(stream);
   
@@ -173,29 +198,41 @@ const [pc, setPc] = useState(null);
   
       if (!offerSnapshot.exists()) {
         toast({ title: "No active meeting", status: "error", duration: 3000, isClosable: true });
+        setActiveMeeting(null);
+        // Clean up media if no meeting
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
         return;
       }
   
-      const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+      // Close any existing peer connection
+      if (pc) {
+        pc.close();
+      }
   
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      const newPc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
   
-      pc.onicecandidate = event => {
+      stream.getTracks().forEach(track => newPc.addTrack(track, stream));
+  
+      newPc.onicecandidate = event => {
         if (event.candidate) {
           set(ref(db, `calls/${requestId}/receiverCandidate`), event.candidate);
         }
       };
   
-      pc.ontrack = event => {
+      newPc.ontrack = event => {
         setRemoteStream(event.streams[0]);
       };
   
-      await pc.setRemoteDescription(new RTCSessionDescription(offerSnapshot.val()));
+      await newPc.setRemoteDescription(new RTCSessionDescription(offerSnapshot.val()));
   
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
+      const answer = await newPc.createAnswer();
+      await newPc.setLocalDescription(answer);
   
       await set(ref(db, `calls/${requestId}/answer`), { sdp: answer.sdp, type: answer.type });
+      
+      setPc(newPc);
   
       toast({
         title: "Joined Meeting",
@@ -206,6 +243,19 @@ const [pc, setPc] = useState(null);
       });
     } catch (err) {
       console.error('Error joining meeting:', err);
+      setActiveMeeting(null);
+      // Clean up any media if there's an error
+      if (myStream) {
+        myStream.getTracks().forEach(track => track.stop());
+        setMyStream(null);
+      }
+      toast({
+        title: "Failed to join meeting",
+        description: err.message,
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
     }
   };
 
@@ -213,44 +263,24 @@ const [pc, setPc] = useState(null);
     if (myStream) {
       myStream.getTracks().forEach(track => track.stop());
     }
+    
+    if (pc) {
+      pc.close();
+      setPc(null);
+    }
+    
     setMyStream(null);
     setRemoteStream(null);
     setActiveMeeting(null);
-  };
-
-
-  
-
-  useEffect(() => {
-    const initialize = async () => {
-      try {
-        // First, request notification permission
-        const permission = await requestNotificationPermission();
-        console.log("Notification permission status:", permission);
-        
-        // Initialize IndexedDB
-        const db = await initializeIndexedDB();
-        console.log('IndexedDB initialized');
-        
-        // Register service worker for notifications
-        const registration = await registerServiceWorker();
-        setSwRegistration(registration);
-        console.log('Service worker registered');
-        
-        // Fetch events from Firebase
-        fetchEvents();
-        
-        // Set up check for upcoming events
-        const intervalId = setInterval(checkUpcomingEvents, 60000); // Check every minute
-        
-        return () => clearInterval(intervalId);
-      } catch (error) {
-        console.error('Error during initialization:', error);
-      }
-    };
     
-    initialize();
-  }, []);
+    toast({
+      title: "Meeting Ended",
+      description: "You have left the meeting",
+      status: "info",
+      duration: 3000,
+      isClosable: true,
+    });
+  };
 
   // Function to initialize the IndexedDB
   const initializeIndexedDB = () => {
@@ -327,22 +357,42 @@ const [pc, setPc] = useState(null);
     if (!userId) return;
 
     const db = getDatabase();
-    const eventsRef = ref(db, `users/${userId}/events`);
-
-    onValue(eventsRef, (snapshot) => {
+    
+    // Fetch user-created events
+    const userEventsRef = ref(db, `users/${userId}/events`);
+    onValue(userEventsRef, (snapshot) => {
       const data = snapshot.val() || {};
-      const loadedEvents = Object.keys(data).map((key) => ({
+      const userEvents = Object.keys(data).map((key) => ({
         id: key,
-        ...data[key]
+        ...data[key],
+        createdBy: 'user',  // Add source identification
+        colorCode: EVENT_COLORS.userCreated,
+        canDelete: true     // User can delete their own events
       }));
-      setEvents(loadedEvents);
       
-      // Store the fetched events in IndexedDB for offline access
-      storeEventsInIndexedDB(loadedEvents);
-      
-      // Schedule notifications for all events
-      loadedEvents.forEach(event => {
-        scheduleNotification(event);
+      // Fetch doctor-created events (appointments)
+      const appointmentsRef = ref(db, `users/${userId}/appointments`);
+      onValue(appointmentsRef, (appointmentsSnapshot) => {
+        const appointmentsData = appointmentsSnapshot.val() || {};
+        const doctorEvents = Object.keys(appointmentsData).map((key) => ({
+          id: key,
+          ...appointmentsData[key],
+          createdBy: 'doctor',  // Add source identification
+          colorCode: EVENT_COLORS.doctorCreated,
+          canDelete: false      // User cannot delete doctor appointments directly
+        }));
+        
+        // Combine both event types
+        const allEvents = [...userEvents, ...doctorEvents];
+        setEvents(allEvents);
+        
+        // Store the fetched events in IndexedDB for offline access
+        storeEventsInIndexedDB(allEvents);
+        
+        // Schedule notifications for all events
+        allEvents.forEach(event => {
+          scheduleNotification(event);
+        });
       });
     });
   };
@@ -445,8 +495,9 @@ const [pc, setPc] = useState(null);
     }
     
     try {
+      const eventType = event.createdBy === 'doctor' ? 'Appointment' : 'Event';
       const options = {
-        body: `Your event "${event.eventName}" is starting in 2 minutes`,
+        body: `Your ${eventType} "${event.eventName}" is starting in 2 minutes`,
         icon: "/logo192.png",
         requireInteraction: true
       };
@@ -466,7 +517,8 @@ const [pc, setPc] = useState(null);
 
   // Function to show toast notification as fallback
   const showToastNotification = (event) => {
-    toast.info(`Reminder: "${event.eventName}" at ${event.eventTime}`, {
+    const eventType = event.createdBy === 'doctor' ? 'Appointment' : 'Event';
+    toast.info(`Reminder: "${event.eventName}" ${eventType} at ${event.eventTime}`, {
       position: "top-right",
       autoClose: 5000,
       hideProgressBar: false,
@@ -484,6 +536,7 @@ const [pc, setPc] = useState(null);
     return `${year}-${month}-${day}`;
   };
 
+  // Add a user event
   const addEvent = () => {
     const userId = auth.currentUser?.uid;
   
@@ -496,7 +549,9 @@ const [pc, setPc] = useState(null);
     const eventData = {
       eventName: newEvent.title,
       eventDate: newEvent.date,
-      eventTime: newEvent.time
+      eventTime: newEvent.time,
+      createdBy: 'user',  // Mark as user-created
+      colorCode: EVENT_COLORS.userCreated,
     };
   
     set(eventRef, eventData).then(() => {
@@ -510,51 +565,81 @@ const [pc, setPc] = useState(null);
       });
       
       fetchEvents();
+      
+      toast({
+        title: "Event Added",
+        description: "Your event has been added to the calendar",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    }).catch(error => {
+      toast({
+        title: "Error",
+        description: error.message,
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
     });
   };
 
-  const removeEvent = async (id) => {
+  // Remove an event
+  const removeEvent = async (id, createdBy) => {
     const userId = auth.currentUser?.uid;
     if (!userId) return;
   
     const db = getDatabase();
   
     try {
-      // Remove event from Firebase for user
-      const eventRef = ref(db, `users/${userId}/events/${id}`);
-      await remove(eventRef);
-  
-      // Fetch doctor ID from request data before deleting
-      const requestRef = ref(db, `users/${userId}/requests/${id}`);
-      onValue(requestRef, async (snapshot) => {
-        const requestData = snapshot.val();
-        if (requestData && requestData.doctorId) {
-          const doctorId = requestData.doctorId;
-  
-          // Remove the request from doctor's dashboard
-          const doctorRequestRef = ref(db, `doctor/${doctorId}/requests/${id}`);
-          await remove(doctorRequestRef);
-  
-          // Notify doctor about cancellation
-          await set(ref(db, `doctor/${doctorId}/notifications/${id}`), {
-            message: `The appointment with ${requestData.userName} has been cancelled.`,
-            timestamp: Date.now(),
-          });
-  
-          // Remove the request from user's requests
-          await remove(requestRef);
+      if (createdBy === 'user') {
+        // Remove user-created event
+        const eventRef = ref(db, `users/${userId}/events/${id}`);
+        await remove(eventRef);
+        
+        toast({
+          title: "Event Removed",
+          description: "The event has been removed from your calendar.",
+          status: "info",
+          duration: 3000,
+          isClosable: true,
+        });
+      } else if (createdBy === 'doctor') {
+        // For doctor appointments, we need to cancel the appointment
+        // First, fetch the appointment data
+        const appointmentRef = ref(db, `users/${userId}/appointments/${id}`);
+        const snapshot = await get(appointmentRef);
+        const appointmentData = snapshot.val();
+        
+        if (!appointmentData || !appointmentData.doctorId) {
+          throw new Error("Could not find appointment details");
         }
-      });
+        
+        const doctorId = appointmentData.doctorId;
+        
+        // Remove the appointment from doctor's dashboard
+        const doctorAppointmentRef = ref(db, `doctor/${doctorId}/appointments/${id}`);
+        await remove(doctorAppointmentRef);
+        
+        // Notify doctor about cancellation
+        await set(ref(db, `doctor/${doctorId}/notifications/${id}`), {
+          message: `The appointment with ${appointmentData.userName || "a patient"} has been cancelled.`,
+          timestamp: Date.now(),
+        });
+        
+        // Remove the appointment from user's appointments
+        await remove(appointmentRef);
+        
+        toast({
+          title: "Appointment Canceled",
+          description: "The appointment has been cancelled and the doctor has been notified.",
+          status: "info",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
   
       fetchEvents(); // Refresh calendar after deletion
-  
-      toast({
-        title: "Appointment Canceled",
-        description: "The appointment has been removed from your calendar.",
-        status: "info",
-        duration: 3000,
-        isClosable: true,
-      });
     } catch (error) {
       console.error("Error canceling event:", error);
       toast({
@@ -566,6 +651,14 @@ const [pc, setPc] = useState(null);
       });
     }
   };
+
+  // Add this function before the removeEvent function
+  const confirmRemoveEvent = (id, createdBy) => {
+    setEventToDelete({ id, createdBy });
+    setIsDeleteModalOpen(true);
+  };
+
+
 
   const daysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
@@ -583,9 +676,38 @@ const [pc, setPc] = useState(null);
     return eventYear === year && eventMonth === month + 1;
   });
 
+  // Function to determine event type text
+  const getEventTypeText = (event) => {
+    return event.createdBy === 'doctor' ? 'Doctor Appointment' : 'Personal Event';
+  };
+
+  // Function to determine if an event can be joined
+  const canJoinMeeting = (eventId) => {
+    return meetingStates[eventId]?.canJoin && !activeMeeting;
+  };
+
   return (
     <>
     <ToastContainer />
+      {/* Video Meeting Section - Show when in active meeting */}
+      {activeMeeting && (
+        <VideoModal>
+          <VideoModalContent>
+            <VideoModalHeader>
+              <h3>Video Meeting</h3>
+              <CloseButton onClick={endMeet}>✕</CloseButton>
+            </VideoModalHeader>
+            <VideoContainer>
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
+                {myStream && <Video stream={myStream} />}
+                {remoteStream && <Video stream={remoteStream} />}
+              </div>
+              <EndButton onClick={endMeet}>End Meeting</EndButton>
+            </VideoContainer>
+          </VideoModalContent>
+        </VideoModal>
+      )}
+
       {/* Popup Section */}
       {clickedDate && (
         <Popup
@@ -603,17 +725,24 @@ const [pc, setPc] = useState(null);
             {events
               .filter((event) => event.eventDate === clickedDate)
               .map((event, index) => (
-                <div key={index}>
+                <EventPopupItem key={index} eventType={event.createdBy}>
                   <p><strong>Time:</strong> {event.eventTime}</p>
                   <p><strong>Event:</strong> {event.eventName}</p>
-                  <JoinButton
-                    onClick={() => joinMeet(event.id, meetingStates[event.id]?.doctorPeerId)}
-                    disabled={!meetingStates[event.id]?.canJoin || activeMeeting === event.id}
-                  >
-                    Join Meet
-                  </JoinButton>
-                  <RemoveButton onClick={() => removeEvent(event.id)}>Delete</RemoveButton>
-                </div>
+                  <p><strong>Type:</strong> {getEventTypeText(event)}</p>
+                  <ButtonContainer>
+                    {event.createdBy === 'doctor' && (
+                      <JoinButton
+                        onClick={() => joinMeet(event.id)}
+                        disabled={!canJoinMeeting(event.id)}
+                      >
+                        {canJoinMeeting(event.id) ? "Join Meet" : "Waiting for Doctor"}
+                      </JoinButton>
+                    )}
+                    <RemoveButton onClick={() => removeEvent(event.id, event.createdBy)}>
+                      {event.createdBy === 'doctor' ? "Cancel Appointment" : "Delete Event"}
+                    </RemoveButton>
+                  </ButtonContainer>
+                </EventPopupItem>
               ))
             }
 
@@ -700,11 +829,26 @@ const [pc, setPc] = useState(null);
             {days.map((day) => {
               const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
               const dayEvents = events.filter(event => event.eventDate === formattedDate);
+              
+              // Check if day has doctor events, user events or both
+              const hasDoctorEvents = dayEvents.some(event => event.createdBy === 'doctor');
+              const hasUserEvents = dayEvents.some(event => event.createdBy === 'user');
+              
+              let dayColor = 'transparent';
+              if (hasDoctorEvents && hasUserEvents) {
+                // Mixed events - use a special color or style
+                dayColor = 'linear-gradient(135deg, #b693d1 50%, #6ed5cb 50%)';
+              } else if (hasDoctorEvents) {
+                dayColor = EVENT_COLORS.doctorCreated;
+              } else if (hasUserEvents) {
+                dayColor = EVENT_COLORS.userCreated;
+              }
             
               return (
                 <Day
                   key={day}
                   hasEvent={dayEvents.length > 0}
+                  color={dayColor}
                   onClick={(e) => {
                     setClickedDate(formattedDate);    
                     setPopupPosition({ x: e.clientX, y: e.clientY });
@@ -715,6 +859,22 @@ const [pc, setPc] = useState(null);
               );
             })}
           </CalendarDays>
+          
+          {/* Legend */}
+          <Legend>
+            <LegendItem>
+              <LegendColorBox color={EVENT_COLORS.userCreated} />
+              <span>Personal Events</span>
+            </LegendItem>
+            <LegendItem>
+              <LegendColorBox color={EVENT_COLORS.doctorCreated} />
+              <span>Doctor Appointments</span>
+            </LegendItem>
+            <LegendItem>
+              <LegendColorBox color="linear-gradient(135deg, #b693d1 50%, #6ed5cb 50%)" />
+              <span>Mixed Events</span>
+            </LegendItem>
+          </Legend>
         </MainCalendar>
 
         <EventList>
@@ -728,7 +888,7 @@ const [pc, setPc] = useState(null);
                 const day = eventDate.getDate();
                 return (
                   <EventItem key={index}>
-                    <EventDot color={event.color || getRandomEventColor()} />
+                    <EventDot color={event.colorCode} />
                     <EventDetails>
                       <EventDateTime>
                         {monthName} {day}, {event.eventTime}
@@ -736,13 +896,15 @@ const [pc, setPc] = useState(null);
                       <EventName>{event.eventName}</EventName>
                     </EventDetails>
                     <PriorityDots>{event.priority}</PriorityDots>
-                    <JoinButton
-                      onClick={() => joinMeet(event.id, meetingStates[event.id]?.doctorPeerId)}
-                      disabled={!meetingStates[event.id]?.canJoin || activeMeeting === event.id}
-                    >
-                      Join Meet
-                    </JoinButton>
-                    <DeleteButton onClick={() => removeEvent(event.id)}>
+                    {event.createdBy === 'doctor' && (
+                      <JoinButton
+                        onClick={() => joinMeet(event.id)}
+                        disabled={!meetingStates[event.id]?.canJoin || activeMeeting === event.id}
+                      >
+                        Join Meet
+                      </JoinButton>
+                    )}
+                    <DeleteButton onClick={() => confirmRemoveEvent(event.id, event.createdBy)}>
                       <img 
                         src={Delete} 
                         alt="Delete" 
@@ -759,6 +921,41 @@ const [pc, setPc] = useState(null);
           )}
         </EventList>
       </CalendarContainer>
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)}>
+          <ModalContent>
+      <ModalHeader>
+        <h3>{eventToDelete.createdBy === 'doctor' ? 'Cancel Appointment' : 'Delete Event'}</h3>
+        <CloseButton onClick={() => setIsDeleteModalOpen(false)}>×</CloseButton>
+      </ModalHeader>
+      <div style={{ padding: '15px' }}>
+        <p>
+          {eventToDelete.createdBy === 'doctor' 
+            ? 'You are about to cancel your appointment with the doctor. Do you want to proceed?' 
+            : 'Are you sure you want to delete this event?'}
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', gap: '10px' }}>
+          <Button 
+            onClick={() => setIsDeleteModalOpen(false)}
+            style={{ backgroundColor: '#f0f0f0', color: '#333' }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => {
+              removeEvent(eventToDelete.id, eventToDelete.createdBy);
+              setIsDeleteModalOpen(false);
+            }}
+            style={{ backgroundColor: '#e53e3e', color: 'white' }}
+          >
+            {eventToDelete.createdBy === 'doctor' ? 'Cancel Appointment' : 'Delete'}
+          </Button>
+        </div>
+      </div>
+          </ModalContent>
+        </Modal>
+      )}
     </>
   );
 };
@@ -1162,4 +1359,88 @@ const EndButton = styled.button`
   &:hover {
     background-color: #ff3232;
   }
+`;
+
+// Video modal components
+const VideoModal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+`;
+
+const VideoModalContent = styled.div`
+  background-color: white;
+  border-radius: 8px;
+  width: 80%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+`;
+
+const VideoModalHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #eee;
+  
+  h3 {
+    margin: 0;
+    color: #333;
+  }
+`;
+
+// Event popup item component
+const EventPopupItem = styled.div`
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  background-color: #f9f9f9;
+  border-left: 3px solid ${props => props.color || '#8e73be'};
+  
+  &:hover {
+    background-color: #f0f0f0;
+  }
+`;
+
+// Button container for event actions
+const ButtonContainer = styled.div`
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+`;
+
+// Legend components for color coding
+const Legend = styled.div`
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  margin-top: 20px;
+  border-top: 1px solid #eee;
+`;
+
+const LegendItem = styled.div`
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #666;
+`;
+
+const LegendColorBox = styled.div`
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background-color: ${props => props.color};
+  margin-right: 10px;
 `;

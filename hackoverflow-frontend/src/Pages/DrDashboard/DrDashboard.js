@@ -31,6 +31,12 @@ import {
   ModalCloseButton,
   useDisclosure,
   Spinner,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogContent,
+  AlertDialogOverlay,
 } from '@chakra-ui/react';
 import { getDatabase, set, ref, onValue, update, remove } from 'firebase/database';
 
@@ -76,6 +82,12 @@ const DrDashboard = () => {
   const peerInstance = useRef(null);
   const [activeCallRequestId, setActiveCallRequestId] = useState(null);
   const [pc, setPc] = useState(null);
+  
+  // For delete confirmation dialog
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
+  const [isDeleteAlertClose, setIsDeleteAlertClose] = useState(false);
+  const [appointmentToDelete, setAppointmentToDelete] = useState(null);
+  const cancelRef = useRef();
 
   useEffect(() => {
     const currentUser = sessionStorage.getItem('currentUser');
@@ -95,35 +107,19 @@ const DrDashboard = () => {
     const userData = JSON.parse(currentUser);
     setUser(userData);
 
-    // ✅ Get user media (camera + mic)
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      .then((stream) => {
-        setMyStream(stream);
-      })
-      .catch((error) => {
-        console.error("Error accessing media devices:", error);
-      });
-
-    // ✅ Initialize WebRTC
-    const newPc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
-
-    setPc(newPc);
-
-    // ✅ Fetch patient requests from Firebase
+    // ✅ Only fetch patient requests from Firebase
     fetchDoctorRequests(userData.id);
 
+    // Clean up function
     return () => {
-      if (newPc) {
-        newPc.close();
-      }
       if (myStream) {
         myStream.getTracks().forEach(track => track.stop());
       }
+      if (pc) {
+        pc.close();
+      }
     };
   }, [navigate, toast]);
-
 
   const fetchDoctorRequests = (doctorId) => {
     setLoading(true);
@@ -151,30 +147,75 @@ const DrDashboard = () => {
 
   const startMeet = async (requestId, userId) => {
     try {
+      // Only get user media when explicitly starting a meeting
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
       });
       setMyStream(stream);
   
-      const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+      // Create a new RTCPeerConnection instance when starting the meeting
+      const newPc = new RTCPeerConnection({ 
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }] 
+      });
+      setPc(newPc);
   
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      // Add all tracks from our stream to the peer connection
+      stream.getTracks().forEach(track => newPc.addTrack(track, stream));
   
-      pc.onicecandidate = event => {
+      // Set up ICE candidate handling
+      newPc.onicecandidate = event => {
         if (event.candidate) {
-          set(ref(getDatabase(), `calls/${requestId}/callerCandidate`), event.candidate);
+          const db = getDatabase();
+          set(ref(db, `calls/${requestId}/callerCandidate`), event.candidate);
         }
       };
   
-      pc.ontrack = event => {
+      // Handle incoming tracks (patient's video/audio)
+      newPc.ontrack = event => {
         setRemoteStream(event.streams[0]);
       };
   
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
+      // Create and set local description (offer)
+      const offer = await newPc.createOffer();
+      await newPc.setLocalDescription(offer);
       
-      await set(ref(getDatabase(), `calls/${requestId}/offer`), { sdp: offer.sdp, type: offer.type });
+      // Store the offer in Firebase
+      const db = getDatabase();
+      await set(ref(db, `calls/${requestId}/offer`), { 
+        sdp: offer.sdp, 
+        type: offer.type 
+      });
+
+      // Set up listener for answer from patient
+      const answerRef = ref(db, `calls/${requestId}/answer`);
+      onValue(answerRef, async (snapshot) => {
+        const answer = snapshot.val();
+        if (answer && !newPc.currentRemoteDescription) {
+          await newPc.setRemoteDescription(new RTCSessionDescription(answer));
+        }
+      });
+
+      // Set up listener for ICE candidates from patient
+      const candidatesRef = ref(db, `calls/${requestId}/patientCandidate`);
+      onValue(candidatesRef, (snapshot) => {
+        const candidate = snapshot.val();
+        if (candidate && newPc.remoteDescription) {
+          newPc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      });
+  
+      // Set active call request ID
+      setActiveCallRequestId(requestId);
+      
+      // Update call status in Firebase
+      await update(ref(db, `doctor/${user.id}/requests/${requestId}`), {
+        callStatus: 'active'
+      });
+      
+      await update(ref(db, `users/${userId}/requests/${requestId}`), {
+        callStatus: 'active'
+      });
   
       toast({
         title: 'Meeting Started',
@@ -185,17 +226,113 @@ const DrDashboard = () => {
       });
     } catch (err) {
       console.error('Error starting meeting:', err);
+      toast({
+        title: 'Error Starting Meeting',
+        description: err.message || 'Failed to access camera and microphone',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
     }
   };
 
-  const endMeet = () => {
-    if (myStream) {
-      myStream.getTracks().forEach(track => track.stop());
+  const endMeet = async () => {
+    if (!activeCallRequestId) return;
+    
+    try {
+      // Stop all media tracks
+      if (myStream) {
+        myStream.getTracks().forEach(track => track.stop());
+      }
+      setMyStream(null);
+      setRemoteStream(null);
+      
+      // Close peer connection
+      if (pc) {
+        pc.close();
+        setPc(null);
+      }
+      
+      // Update call status in Firebase
+      const db = getDatabase();
+      if (user && activeCallRequestId) {
+        const request = requests.find(r => r.id === activeCallRequestId);
+        if (request) {
+          await update(ref(db, `doctor/${user.id}/requests/${activeCallRequestId}`), {
+            callStatus: 'ended'
+          });
+          
+          await update(ref(db, `users/${request.userId}/requests/${activeCallRequestId}`), {
+            callStatus: 'ended'
+          });
+          
+          // Clean up call data
+          await remove(ref(db, `calls/${activeCallRequestId}`));
+        }
+      }
+      
+      setActiveCallRequestId(null);
+      
+      toast({
+        title: 'Meeting Ended',
+        status: 'info',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err) {
+      console.error('Error ending meeting:', err);
     }
-    setMyStream(null);
-    setRemoteStream(null);
-    setActiveCallRequestId(null);
-    socket.emit('meetingEnded', { peerId });
+  };
+
+  const handleDeleteAppointment = (requestId, userId) => {
+    setAppointmentToDelete({ requestId, userId });
+    setIsDeleteAlertOpen(true);
+  };
+
+  const confirmDeleteAppointment = async () => {
+    if (!appointmentToDelete) return;
+    
+    try {
+      const { requestId, userId } = appointmentToDelete;
+      const db = getDatabase();
+      
+      // Remove from doctor's requests
+      await remove(ref(db, `doctor/${user.id}/requests/${requestId}`));
+      
+      // Update in user's requests (mark as completed)
+      await update(ref(db, `users/${userId}/requests/${requestId}`), {
+        status: 'completed'
+      });
+      
+      // Remove from events
+      await remove(ref(db, `users/${userId}/events/${requestId}`));
+      
+      // Remove any call data if exists
+      await remove(ref(db, `calls/${requestId}`));
+      
+      toast({
+        title: 'Appointment Deleted',
+        description: 'The appointment has been successfully removed',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      
+      // Close dialogs
+      setIsDeleteAlertOpen(false);
+      if (selectedRequest && selectedRequest.id === requestId) {
+        onClose();
+      }
+    } catch (error) {
+      console.error("Error deleting appointment:", error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete appointment',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
   };
 
   const handleLogout = () => {
@@ -223,7 +360,6 @@ const DrDashboard = () => {
 
   const handleAcceptRequest = async (requestId, userId, isReschedule = false) => {
     try {
-      const db = getDatabase();
       setSelectedUserId(userId);
       setSelectedRequestId(requestId);
       setIsScheduleOpen(true);
@@ -266,7 +402,18 @@ const DrDashboard = () => {
       case 'pending': return <Badge colorScheme="yellow">Pending</Badge>;
       case 'accepted': return <Badge colorScheme="green">Accepted</Badge>;
       case 'rejected': return <Badge colorScheme="red">Rejected</Badge>;
+      case 'completed': return <Badge colorScheme="blue">Completed</Badge>;
       default: return <Badge colorScheme="gray">{status}</Badge>;
+    }
+  };
+
+  const getCallStatusBadge = (callStatus) => {
+    if (!callStatus) return null;
+    
+    switch(callStatus) {
+      case 'active': return <Badge colorScheme="green">In Progress</Badge>;
+      case 'ended': return <Badge colorScheme="gray">Call Ended</Badge>;
+      default: return null;
     }
   };
 
@@ -398,7 +545,10 @@ const DrDashboard = () => {
                         {request.stressCount}
                         {request.stressCount > 5 && <Badge ml={2} colorScheme="red">High</Badge>}
                       </Td>
-                      <Td>{getStatusBadge(request.status)}</Td>
+                      <Td>
+                        {getStatusBadge(request.status)}
+                        {getCallStatusBadge(request.callStatus)}
+                      </Td>
                       <Td>{request.meetingTime || '-'}</Td>
                       <Td>
                         <HStack spacing={2}>
@@ -436,15 +586,39 @@ const DrDashboard = () => {
                               >
                                 Reschedule
                               </Button>
-                              <Button
-                                size="xs"
-                                colorScheme="purple"
-                                onClick={() => startMeet(request.id, request.userId)}
-                                isDisabled={myStream && activeCallRequestId !== request.id}
-                              >
-                                Start Meet
-                              </Button>
+                              {request.callStatus !== 'active' && (
+                                <Button
+                                  size="xs"
+                                  colorScheme="purple"
+                                  onClick={() => startMeet(request.id, request.userId)}
+                                  isDisabled={activeCallRequestId !== null}
+                                >
+                                  Start Meet
+                                </Button>
+                              )}
+                              {/* Only show Delete button when the call is not ended */}
+                              {request.callStatus !== 'ended' && (
+                                <Button
+                                  size="xs"
+                                  colorScheme="red"
+                                  variant="outline"
+                                  onClick={() => handleDeleteAppointment(request.id, request.userId)}
+                                >
+                                  Delete
+                                </Button>
+                              )}
                             </>
+                          )}
+                          {/* Show Delete button separately when call has ended */}
+                          {request.callStatus === 'ended' && (
+                            <Button
+                              size="xs"
+                              colorScheme="red"
+                              variant="outline"
+                              onClick={() => handleDeleteAppointment(request.id, request.userId)}
+                            >
+                              Delete
+                            </Button>
                           )}
                         </HStack>
                       </Td>
@@ -480,6 +654,7 @@ const DrDashboard = () => {
                 <Box>
                   <Text fontWeight="bold">Status:</Text>
                   {getStatusBadge(selectedRequest.status)}
+                  {getCallStatusBadge(selectedRequest.callStatus)}
                 </Box>
                 <Box>
                   <Text fontWeight="bold">From:</Text>
@@ -528,13 +703,42 @@ const DrDashboard = () => {
               </>
             )}
             {selectedRequest && selectedRequest.status === 'accepted' && (
+              <>
+                {selectedRequest.callStatus !== 'active' && (
+                  <Button 
+                    colorScheme="purple" 
+                    mr={3}
+                    onClick={() => startMeet(selectedRequest.id, selectedRequest.userId)}
+                    isDisabled={activeCallRequestId !== null}
+                  >
+                    Start Meet
+                  </Button>
+                )}
+                <Button 
+                  colorScheme="orange" 
+                  mr={3}
+                  onClick={() => handleAcceptRequest(selectedRequest.id, selectedRequest.userId, true)}
+                >
+                  Reschedule
+                </Button>
+                {/* Only show Delete button when the call is not ended */}
+                {selectedRequest.callStatus !== 'ended' && (
+                  <Button 
+                    colorScheme="red"
+                    onClick={() => handleDeleteAppointment(selectedRequest.id, selectedRequest.userId)}
+                  >
+                    Delete Appointment
+                  </Button>
+                )}
+              </>
+            )}
+            {/* Show Delete button separately when call has ended */}
+            {selectedRequest && selectedRequest.callStatus === 'ended' && (
               <Button 
-                colorScheme="purple" 
-                mr={3}
-                onClick={() => startMeet(selectedRequest.id, selectedRequest.userId)}
-                isDisabled={myStream && activeCallRequestId !== selectedRequest.id}
+                colorScheme="red"
+                onClick={() => handleDeleteAppointment(selectedRequest.id, selectedRequest.userId)}
               >
-                Start Meet
+                Delete Appointment
               </Button>
             )}
           </ModalFooter>
@@ -567,6 +771,34 @@ const DrDashboard = () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* Delete Confirmation Alert Dialog */}
+      <AlertDialog
+        isOpen={isDeleteAlertOpen}
+        leastDestructiveRef={cancelRef}
+        onClose={() => setIsDeleteAlertClose(false)}
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              Delete Appointment
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              Are you sure you want to delete this appointment? This action cannot be undone.
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button ref={cancelRef} onClick={() => setIsDeleteAlertOpen(false)}>
+                Cancel
+              </Button>
+              <Button colorScheme="red" onClick={confirmDeleteAppointment} ml={3}>
+                Delete
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
     </Container>
   );
 };
