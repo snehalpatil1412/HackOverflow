@@ -172,8 +172,8 @@ useEffect(() => {
         
         // Process each call
         Object.keys(calls).forEach(callId => {
-          // If there's an offer, it means the doctor has started the meeting
-          if (calls[callId] && calls[callId].offer) {
+          // If the doctor has started the meeting
+          if (calls[callId] && calls[callId].meetingStarted) {
             updatedMeetingStates[callId] = { 
               canJoin: true 
             };
@@ -195,7 +195,7 @@ useEffect(() => {
         events.forEach(event => {
           if (event.createdBy === 'doctor' && !updatedMeetingStates[event.id]) {
             updatedMeetingStates[event.id] = {
-              canJoin: false  // Default to not joinable unless there's an offer
+              canJoin: false  // Default to not joinable unless the doctor starts it
             };
           }
         });
@@ -205,7 +205,8 @@ useEffect(() => {
     });
     
     return () => listener();
-  };
+};
+
 
   const joinMeet = async (requestId) => {
     try {

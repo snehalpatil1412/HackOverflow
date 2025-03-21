@@ -147,94 +147,98 @@ const DrDashboard = () => {
 
   const startMeet = async (requestId, userId) => {
     try {
-      // Only get user media when explicitly starting a meeting
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      setMyStream(stream);
-  
-      // Create a new RTCPeerConnection instance when starting the meeting
-      const newPc = new RTCPeerConnection({ 
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }] 
-      });
-      setPc(newPc);
-  
-      // Add all tracks from our stream to the peer connection
-      stream.getTracks().forEach(track => newPc.addTrack(track, stream));
-  
-      // Set up ICE candidate handling
-      newPc.onicecandidate = event => {
-        if (event.candidate) {
-          const db = getDatabase();
-          set(ref(db, `calls/${requestId}/callerCandidate`), event.candidate);
-        }
-      };
-  
-      // Handle incoming tracks (patient's video/audio)
-      newPc.ontrack = event => {
-        setRemoteStream(event.streams[0]);
-      };
-  
-      // Create and set local description (offer)
-      const offer = await newPc.createOffer();
-      await newPc.setLocalDescription(offer);
-      
-      // Store the offer in Firebase
-      const db = getDatabase();
-      await set(ref(db, `calls/${requestId}/offer`), { 
-        sdp: offer.sdp, 
-        type: offer.type 
-      });
+        // Only get user media when explicitly starting a meeting
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+        });
+        setMyStream(stream);
 
-      // Set up listener for answer from patient
-      const answerRef = ref(db, `calls/${requestId}/answer`);
-      onValue(answerRef, async (snapshot) => {
-        const answer = snapshot.val();
-        if (answer && !newPc.currentRemoteDescription) {
-          await newPc.setRemoteDescription(new RTCSessionDescription(answer));
-        }
-      });
+        // Create a new RTCPeerConnection instance when starting the meeting
+        const newPc = new RTCPeerConnection({ 
+            iceServers: [{ urls: "stun:stun.l.google.com:19302" }] 
+        });
+        setPc(newPc);
 
-      // Set up listener for ICE candidates from patient
-      const candidatesRef = ref(db, `calls/${requestId}/patientCandidate`);
-      onValue(candidatesRef, (snapshot) => {
-        const candidate = snapshot.val();
-        if (candidate && newPc.remoteDescription) {
-          newPc.addIceCandidate(new RTCIceCandidate(candidate));
-        }
-      });
-  
-      // Set active call request ID
-      setActiveCallRequestId(requestId);
-      
-      // Update call status in Firebase
-      await update(ref(db, `doctor/${user.id}/requests/${requestId}`), {
-        callStatus: 'active'
-      });
-      
-      await update(ref(db, `users/${userId}/requests/${requestId}`), {
-        callStatus: 'active'
-      });
-  
-      toast({
-        title: 'Meeting Started',
-        description: 'Waiting for patient to join',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
+        // Add all tracks from our stream to the peer connection
+        stream.getTracks().forEach(track => newPc.addTrack(track, stream));
+
+        // Set up ICE candidate handling
+        newPc.onicecandidate = event => {
+            if (event.candidate) {
+                const db = getDatabase();
+                set(ref(db, `calls/${requestId}/callerCandidate`), event.candidate);
+            }
+        };
+
+        // Handle incoming tracks (patient's video/audio)
+        newPc.ontrack = event => {
+            setRemoteStream(event.streams[0]);
+        };
+
+        // Create and set local description (offer)
+        const offer = await newPc.createOffer();
+        await newPc.setLocalDescription(offer);
+
+        // Store the offer in Firebase
+        const db = getDatabase();
+        await set(ref(db, `calls/${requestId}/offer`), { 
+            sdp: offer.sdp, 
+            type: offer.type 
+        });
+
+        // ✅ NEW: Mark the meeting as started in Firebase
+        await set(ref(db, `calls/${requestId}/meetingStarted`), true);
+
+        // Set up listener for answer from patient
+        const answerRef = ref(db, `calls/${requestId}/answer`);
+        onValue(answerRef, async (snapshot) => {
+            const answer = snapshot.val();
+            if (answer && !newPc.currentRemoteDescription) {
+                await newPc.setRemoteDescription(new RTCSessionDescription(answer));
+            }
+        });
+
+        // Set up listener for ICE candidates from patient
+        const candidatesRef = ref(db, `calls/${requestId}/patientCandidate`);
+        onValue(candidatesRef, (snapshot) => {
+            const candidate = snapshot.val();
+            if (candidate && newPc.remoteDescription) {
+                newPc.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+        });
+
+        // Set active call request ID
+        setActiveCallRequestId(requestId);
+
+        // Update call status in Firebase
+        await update(ref(db, `doctor/${user.id}/requests/${requestId}`), {
+            callStatus: 'active'
+        });
+
+        await update(ref(db, `users/${userId}/requests/${requestId}`), {
+            callStatus: 'active'
+        });
+
+        toast({
+            title: 'Meeting Started',
+            description: 'Waiting for patient to join',
+            status: 'success',
+            duration: 3000,
+            isClosable: true,
+        });
     } catch (err) {
-      console.error('Error starting meeting:', err);
-      toast({
-        title: 'Error Starting Meeting',
-        description: err.message || 'Failed to access camera and microphone',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
+        console.error('Error starting meeting:', err);
+        toast({
+            title: 'Error Starting Meeting',
+            description: err.message || 'Failed to access camera and microphone',
+            status: 'error',
+            duration: 3000,
+            isClosable: true,
+        });
     }
   };
+
 
   const endMeet = async () => {
     if (!activeCallRequestId) return;
