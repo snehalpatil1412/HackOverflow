@@ -173,7 +173,6 @@ const AlertDr = () => {
         fetchUserRequests(currentUser.uid);
       }
     });
-
     return () => unsubscribe();
   }, []);
 
