@@ -438,34 +438,7 @@ const VideoPage = () => {
             </EmotionText>
           </EmotionFrame>
         )}
-        {/* {extractedText && (
-          <EmotionFrame>
-            <Heading size="md" mb={4} color="rgb(108, 59, 222)">
-              Speech Recognition Results
-            </Heading>
-            <Text mb={2} fontWeight="bold">Detected Language: {detectedLanguage}</Text>
-            <EmotionText>
-              {extractedText}
-            </EmotionText>
-          </EmotionFrame>
-        )} */}
         
-        {/* {emotion && (
-          <EmotionFrame>
-            <Heading size="md" mb={4} color="rgb(108, 59, 222)">
-              Recommendation Based on Your Results
-            </Heading>
-            {emotion === "Highly Stressed" || emotion === "Moderate Stress" ? (
-              <EmotionText>
-                It seems you're feeling {emotion}. No worries, we're here to help you relax and feel better! Here are some videos to calm your mind.
-              </EmotionText>
-            ) : (
-              <EmotionText>
-                You're doing great! Keep it up, and remember to take breaks when needed. Stay positive!
-              </EmotionText>
-            )}
-          </EmotionFrame>
-        )} */}
 
         {videos.length > 0 && (
           <VideoSection>
@@ -499,6 +472,29 @@ const VideoPage = () => {
             </GamesMusicContainer>
           </VideoSection>
         )}
+
+        {emotion == "Not Stressed" && (
+          <>
+          <Heading size="md" mb={4} color="rgb(108, 59, 222)">
+            Enjoy some games and music to keep your mind refreshed and uplifted.
+          </Heading>
+          <GamesMusicContainer>
+            <GridItem>
+              <NavButton onClick={navigateToGames}>
+                <Heading size="lg">Games</Heading>
+                <Text mt={2}>Play stress-relief games</Text>
+              </NavButton>
+            </GridItem>
+            <GridItem>
+              <NavButton onClick={navigateToMusic}>
+                <Heading size="lg">Music</Heading>
+                <Text mt={2}>Listen to calming music</Text>
+              </NavButton>
+            </GridItem>
+          </GamesMusicContainer>
+          </>
+        )}
+
       </RecordingContainer>
 
       <Modal isOpen={isOpen} onClose={onClose} size={modalSize} isCentered>

@@ -1,3 +1,4 @@
+//Loginpage
 import React, { useState } from "react";
 import {
   Box,
@@ -11,6 +12,7 @@ import {
   VStack,
   HStack,
   Spacer,
+  Link,
 } from "@chakra-ui/react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { getDatabase, ref, get } from "firebase/database";
@@ -21,7 +23,7 @@ import styled from "styled-components";
 
 // You'll need to replace these with your actual image paths
 import logoImage from "../../assets/logocalmify.png";
-import meditationImage from "../../assets/loginsignup.png";
+import meditationImage from "../../assets/login.gif";
 
 function StressReductionLogin({ setUser }) {
   const navigate = useNavigate();
@@ -55,37 +57,60 @@ function StressReductionLogin({ setUser }) {
   };
 
   return (
-    <GradientBackground>
+    <WhiteBackground>
       <Container maxW="100%" p={0} h="100vh">
         <Flex h="100%" direction={{ base: "column", md: "row" }}>
           {/* Left side - Meditation Image */}
           <Flex
-            flex={{ base: "1", md: "1.5" }}
-            bg="blue.50"
-            backgroundImage={`url(${meditationImage})`}
-            backgroundSize="cover"
-            backgroundPosition="center"
-            borderRightRadius={{ md: "30px" }}
+            flex={{ base: "1", md: "1.2" }}
+            bg="white"
             position="relative"
             display={{ base: "none", md: "flex" }}
             flexDirection="column"
-            justifyContent="flex-end"
+            justifyContent="center"
+            alignItems="center"
             p={8}
           >
+            <Box
+              maxW="80%"
+              maxH="60%"
+              overflow="hidden"
+              borderRadius="lg"
+              boxShadow="lg"
+            >
+              <Image
+                src={meditationImage}
+                alt="Meditation"
+                objectFit="cover"
+                height="auto"
+                width="100%"
+              />
+            </Box>
+
             <VStack
               align="flex-start"
-              bg="rgba(255,255,255,0.8)"
+              bg="white"
               p={6}
               borderRadius="lg"
-              spacing={2}
+              spacing={4}
               maxW="80%"
+              mt={6}
+              boxShadow="md"
             >
               <Heading size="lg" color="teal.700">
-                Find Your Balance
+                For Healthcare Professionals
               </Heading>
               <Text fontSize="md" color="gray.700">
-                A moment of peace awaits in your daily journey
+                Join our network of certified professionals providing mental wellness support
               </Text>
+              <Button
+                colorScheme="teal"
+                variant="outline"
+                size="md"
+                onClick={() => navigate("/drlogin")}
+              >
+                Register as a Professional
+              </Button>
             </VStack>
           </Flex>
 
@@ -96,6 +121,7 @@ function StressReductionLogin({ setUser }) {
             p={{ base: 6, md: 10 }}
             justify="center"
             align="center"
+            bg="white"
           >
             <VStack spacing={8} w="full" maxW="400px">
               <Image src={logoImage} alt="Calmify" height="60px" />
@@ -107,11 +133,11 @@ function StressReductionLogin({ setUser }) {
                   size="xl"
                   fontWeight="normal"
                 >
-                  Begin Your Journey
+                  Breathe. Center. Thrive.
                 </Heading>
 
                 <Text textAlign="center" color="gray.600" fontSize="lg" mb={4}>
-                  Take a breath and center yourself
+                  Your sanctuary for mindfulness awaits
                 </Text>
 
                 <Button
@@ -144,20 +170,25 @@ function StressReductionLogin({ setUser }) {
 
               <Spacer />
 
-              <Text fontSize="sm" color="gray.500" textAlign="center">
-                Your journey to calm begins with a single step
-              </Text>
+              <VStack spacing={2}>
+                <Text fontSize="sm" color="gray.500" textAlign="center">
+                  "Mindfulness is the key to unlocking your inner peace"
+                </Text>
+                <Text fontSize="xs" color="gray.400" textAlign="center">
+                  Your journey to wellness begins with a single breath
+                </Text>
+              </VStack>
             </VStack>
           </Flex>
         </Flex>
       </Container>
-    </GradientBackground>
+    </WhiteBackground>
   );
 }
 
 // Styled components
-const GradientBackground = styled.div`
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
+const WhiteBackground = styled.div`
+  background: white;
   min-height: 100vh;
 `;
 

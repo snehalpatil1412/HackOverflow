@@ -5,6 +5,7 @@ import { auth } from '../../../firebaseConfig';  // Firebase config import
 import Delete from "../../../assets/trash.png";
 import { ToastContainer, toast } from 'react-toastify';
 import {useToast} from '@chakra-ui/react';
+
 // Helper function to get random event colors similar to the image
 function getRandomEventColor(hover = false) {
   const colors = [
