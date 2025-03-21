@@ -139,6 +139,25 @@ const Calendar = () => {
     
     initialize();
   }, []);
+
+  // Add this useEffect to initialize meetingStates for doctor events
+useEffect(() => {
+  const doctorEvents = events.filter(event => event.createdBy === 'doctor');
+  if (doctorEvents.length > 0) {
+    // Initialize meeting states for all doctor events
+    const initialStates = {};
+    doctorEvents.forEach(event => {
+      initialStates[event.id] = {
+        canJoin: meetingStates[event.id]?.canJoin || false
+      };
+    });
+    
+    // Only update if there are changes to avoid re-renders
+    if (Object.keys(initialStates).length > 0) {
+      setMeetingStates(prev => ({...prev, ...initialStates}));
+    }
+  }
+}, [events]);
   
 
   // Listen for active meetings from doctors
@@ -146,25 +165,21 @@ const Calendar = () => {
     const db = getDatabase();
     const callsRef = ref(db, "calls/");
     
-    // Track meetings we've already notified about
-    const notifiedMeetings = new Set();
-    
     const listener = onValue(callsRef, (snapshot) => {
       if (snapshot.exists()) {
         const calls = snapshot.val();
-        const updatedMeetingStates = { ...meetingStates };
+        const updatedMeetingStates = {};
         
         // Process each call
         Object.keys(calls).forEach(callId => {
           // If there's an offer, it means the doctor has started the meeting
           if (calls[callId] && calls[callId].offer) {
             updatedMeetingStates[callId] = { 
-              canJoin: true,
+              canJoin: true 
             };
             
-            // Show toast only for newly started meetings that we haven't notified about yet
-            if (!meetingStates[callId]?.canJoin && !notifiedMeetings.has(callId)) {
-              notifiedMeetings.add(callId); // Mark as notified
+            // Only show toast for newly active meetings
+            if (!meetingStates[callId]?.canJoin) {
               toast({
                 title: "Meeting Started",
                 description: "Doctor has started the meeting. You can join now.",
@@ -176,11 +191,19 @@ const Calendar = () => {
           }
         });
         
+        // Find all doctor events and set their state
+        events.forEach(event => {
+          if (event.createdBy === 'doctor' && !updatedMeetingStates[event.id]) {
+            updatedMeetingStates[event.id] = {
+              canJoin: false  // Default to not joinable unless there's an offer
+            };
+          }
+        });
+        
         setMeetingStates(updatedMeetingStates);
       }
     });
     
-    // Return unsubscribe function for cleanup
     return () => listener();
   };
 
@@ -377,9 +400,10 @@ const Calendar = () => {
         const doctorEvents = Object.keys(appointmentsData).map((key) => ({
           id: key,
           ...appointmentsData[key],
-          createdBy: 'doctor',  // Add source identification
+          createdBy: 'doctor',  // Explicitly set this
           colorCode: EVENT_COLORS.doctorCreated,
-          canDelete: false      // User cannot delete doctor appointments directly
+          canDelete: false,
+          canJoin: true  // Add this to make it joinable by default
         }));
         
         // Combine both event types
@@ -730,14 +754,14 @@ const Calendar = () => {
                   <p><strong>Event:</strong> {event.eventName}</p>
                   <p><strong>Type:</strong> {getEventTypeText(event)}</p>
                   <ButtonContainer>
-                    {event.createdBy === 'doctor' && (
-                      <JoinButton
-                        onClick={() => joinMeet(event.id)}
-                        disabled={!canJoinMeeting(event.id)}
-                      >
-                        {canJoinMeeting(event.id) ? "Join Meet" : "Waiting for Doctor"}
-                      </JoinButton>
-                    )}
+                  {event.createdBy === 'doctor' && (
+                    <JoinButton
+                      onClick={() => joinMeet(event.id)}
+                      disabled={activeMeeting !== null}
+                    >
+                      {meetingStates[event.id]?.canJoin ? "Join Meet" : "Waiting for Doctor"}
+                    </JoinButton>
+                  )}
                     <RemoveButton onClick={() => removeEvent(event.id, event.createdBy)}>
                       {event.createdBy === 'doctor' ? "Cancel Appointment" : "Delete Event"}
                     </RemoveButton>
@@ -1143,9 +1167,24 @@ const EventItems = styled.div`
 
 const EventItem = styled.div`
   display: flex;
-  align-items: flex-start;
-  padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  
+  &:last-child {
+    border-bottom: none;
+  }
+  
+  /* Add this to ensure there's room for buttons */
+  & > * {
+    margin-right: 5px;
+  }
+  
+  /* Ensure EventDetails doesn't take all the space */
+  & > EventDetails {
+    flex: 1;
+    min-width: 0; /* Allow flex items to shrink below content size */
+  }
 `;
 const EventDot = styled.div`
   width: 10px;
@@ -1331,18 +1370,26 @@ const VideoContainer = styled.div`
   border-bottom: 1px solid #ddd;
 `;
 
+// Add or update this styled component
 const JoinButton = styled.button`
-  background-color: ${props => props.disabled ? '#cccccc' : '#4CAF50'};
+  background-color: #4CAF50;
   color: white;
   border: none;
-  border-radius: 4px;
   padding: 5px 10px;
-  font-size: 12px;
-  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
+  border-radius: 4px;
+  cursor: pointer;
   margin-right: 10px;
+  font-size: 0.9rem;
+  display: inline-block; /* Ensure it's always displayed */
   
-  &:hover {
-    background-color: ${props => props.disabled ? '#cccccc' : '#45a049'};
+  &:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+  
+  &:hover:not(:disabled) {
+    background-color: #45a049;
   }
 `;
 
