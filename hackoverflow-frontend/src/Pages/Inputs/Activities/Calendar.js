@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { getDatabase, ref, set, onValue, remove } from 'firebase/database';
 import { auth } from '../../../firebaseConfig';  // Firebase config import
 import Delete from "../../../assets/trash.png";
 import { ToastContainer, toast } from 'react-toastify';
 import {useToast} from '@chakra-ui/react';
-
+import Peer from 'peerjs';
+import io from 'socket.io-client';
 // Helper function to get random event colors similar to the image
 function getRandomEventColor(hover = false) {
   const colors = [
@@ -19,6 +20,27 @@ function getRandomEventColor(hover = false) {
   const index = Math.floor(Math.random() * colors.length);
   return hover ? colors[index] + 'dd' : colors[index];
 }
+
+const socket = io('https://socketio-chat-h9jt.herokuapp.com/');
+
+const Video = ({ stream }) => {
+  const videoRef = useRef();
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      style={{ width: '300px', height: '200px', margin: '10px' }}
+    />
+  );
+};
 
 // Simplified service worker registration
 const registerServiceWorker = async () => {
@@ -66,6 +88,117 @@ const Calendar = () => {
   const [notifications, setNotifications] = useState([]);
   const [swRegistration, setSwRegistration] = useState(null);
   const toast = useToast();
+  const [myStream, setMyStream] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
+  const [activeMeeting, setActiveMeeting] = useState(null); // Track active meeting
+  const [meetingStates, setMeetingStates] = useState({}); // Track canJoin for each event
+  const peerInstance = useRef(null);
+
+
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        const permission = await requestNotificationPermission();
+        const db = await initializeIndexedDB();
+        const registration = await registerServiceWorker();
+        setSwRegistration(registration);
+        
+        // Initialize PeerJS
+        const peer = new Peer({
+          host: 'peerjs-server.herokuapp.com',
+          secure: true,
+          port: 443,
+        });
+        peerInstance.current = peer;
+
+        fetchEvents();
+
+        socket.on('meetingStarted', (data) => {
+          setMeetingStates(prev => ({
+            ...prev,
+            [data.requestId]: { canJoin: true, doctorPeerId: data.peerId }
+          }));
+          toast({
+            title: "Meeting Started",
+            description: "Doctor has started the meeting. You can join now.",
+            status: "info",
+            duration: 5000,
+            isClosable: true,
+          });
+        });
+
+        socket.on('meetingEnded', () => {
+          if (myStream) {
+            myStream.getTracks().forEach(track => track.stop());
+            setMyStream(null);
+            setRemoteStream(null);
+            setActiveMeeting(null);
+          }
+        });
+
+        const intervalId = setInterval(checkUpcomingEvents, 60000);
+
+        return () => {
+          clearInterval(intervalId);
+          peer.destroy();
+          socket.off('meetingStarted');
+          socket.off('meetingEnded');
+          if (myStream) {
+            myStream.getTracks().forEach(track => track.stop());
+          }
+        };
+      } catch (error) {
+        console.error('Error during initialization:', error);
+      }
+    };
+    
+    initialize();
+  }, []);
+
+  const joinMeet = async (eventId, doctorPeerId) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      setMyStream(stream);
+      setActiveMeeting(eventId);
+
+      const call = peerInstance.current.call(doctorPeerId, stream);
+      call.on('stream', (remoteStream) => {
+        setRemoteStream(remoteStream);
+      });
+
+      toast({
+        title: "Joined Meeting",
+        description: "You have successfully joined the meeting",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err) {
+      console.error('Error joining meeting:', err);
+      toast({
+        title: "Error",
+        description: "Failed to join meeting",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const endMeet = () => {
+    if (myStream) {
+      myStream.getTracks().forEach(track => track.stop());
+    }
+    setMyStream(null);
+    setRemoteStream(null);
+    setActiveMeeting(null);
+  };
+
+
+  
 
   useEffect(() => {
     const initialize = async () => {
@@ -452,6 +585,12 @@ const Calendar = () => {
                 <div key={index}>
                   <p><strong>Time:</strong> {event.eventTime}</p>
                   <p><strong>Event:</strong> {event.eventName}</p>
+                  <JoinButton
+                    onClick={() => joinMeet(event.id, meetingStates[event.id]?.doctorPeerId)}
+                    disabled={!meetingStates[event.id]?.canJoin || activeMeeting === event.id}
+                  >
+                    Join Meet
+                  </JoinButton>
                   <RemoveButton onClick={() => removeEvent(event.id)}>Delete</RemoveButton>
                 </div>
               ))
@@ -576,6 +715,12 @@ const Calendar = () => {
                       <EventName>{event.eventName}</EventName>
                     </EventDetails>
                     <PriorityDots>{event.priority}</PriorityDots>
+                    <JoinButton
+                      onClick={() => joinMeet(event.id, meetingStates[event.id]?.doctorPeerId)}
+                      disabled={!meetingStates[event.id]?.canJoin || activeMeeting === event.id}
+                    >
+                      Join Meet
+                    </JoinButton>
                     <DeleteButton onClick={() => removeEvent(event.id)}>
                       <img 
                         src={Delete} 
@@ -955,6 +1100,43 @@ const RemoveButton = styled.button`
   font-size: 12px;
   cursor: pointer;
   margin-top: 5px;
+  
+  &:hover {
+    background-color: #ff3232;
+  }
+`;
+
+
+const VideoContainer = styled.div`
+  padding: 16px;
+  background-color: #f0f0f0;
+  border-bottom: 1px solid #ddd;
+`;
+
+const JoinButton = styled.button`
+  background-color: ${props => props.disabled ? '#cccccc' : '#4CAF50'};
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
+  margin-right: 10px;
+  
+  &:hover {
+    background-color: ${props => props.disabled ? '#cccccc' : '#45a049'};
+  }
+`;
+
+const EndButton = styled.button`
+  background-color: #ff5252;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-top: 10px;
   
   &:hover {
     background-color: #ff3232;

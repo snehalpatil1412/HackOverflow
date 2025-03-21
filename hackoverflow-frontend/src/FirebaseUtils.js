@@ -1,5 +1,5 @@
 import { getDatabase, ref, set, get, update } from "firebase/database";
-import { auth } from "./firebaseConfig";
+import { auth } from "./firebaseConfig"; // Import your Firebase config
 
 const saveStressData = async (inputType, inputData, prediction, videoSuggestions, aiSuggestions) => {
   const db = getDatabase();
@@ -31,8 +31,8 @@ const saveStressData = async (inputType, inputData, prediction, videoSuggestions
     await set(inputRef, {
       input: inputData ?? "No input provided",
       prediction: prediction ?? "Unknown",
-      suggestions: videoSuggestions ?? [],
-      aiSuggestions: aiSuggestions ?? "No AI suggestions",
+      suggestions: videoSuggestions ?? [], // ✅ YouTube videos stored here
+      aiSuggestions: aiSuggestions ?? "No AI suggestions", // ✅ AI response stored here
       timestamp: timestamp,
     });
 

@@ -554,11 +554,11 @@ const MainContainer = styled.div`
   justify-content: center;
   background-color: rgb(255, 255, 255);
   min-height: 100vh;
-  // padding: 20px;
+  padding: 20px;
   font-family: 'Poppins', sans-serif;
 
   @media (min-width: 768px) {
-    flex-direction: row; 
+    flex-direction: row;
   }
 `;
 
@@ -567,9 +567,9 @@ const Container = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  // background: linear-gradient(to right,rgb(223, 250, 255), rgb(255, 255, 255));
+  background: linear-gradient(to right, #fff7e6, rgba(220, 153, 99, 0.8));
   width: 100%;
-  // padding: 20px;
+  padding: 20px;
   border-radius: 20px;
   font-family: 'Poppins', sans-serif;
 
@@ -749,7 +749,7 @@ const Image = styled.img`
   max-width: 750px;
   height: auto;
   object-fit: cover;
-  // box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 `;
 
 const EmotionText = styled.p`

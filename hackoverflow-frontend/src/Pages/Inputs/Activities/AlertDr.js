@@ -1,4 +1,3 @@
-//AlertDr
 import React, { useState, useEffect } from "react";
 import {
   Heading,
@@ -173,6 +172,7 @@ const AlertDr = () => {
         fetchUserRequests(currentUser.uid);
       }
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -383,27 +383,43 @@ const AlertDr = () => {
       });
       return;
     }
-  
+
     try {
-      // Save request to Firebase
+      // First save to Firebase
       await saveRequestToFirebase(doctorEmail, subject, message);
-  
-      // Show success toast
-      toast({
-        title: "Email Sent",
-        description: "Your email request has been sent successfully!",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-        position: "top",
-      });
-  
-      // Reset form after successful submission
-      resetForm();
+
+      // Then open email client
+      const to = encodeURIComponent(doctorEmail);
+      const subjectEncoded = encodeURIComponent(subject);
+      const bodyEncoded = encodeURIComponent(message);
+
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${subjectEncoded}&body=${bodyEncoded}`;
+      const newWindow = window.open(gmailUrl, "_blank");
+
+      if (newWindow) {
+        const checkWindowClosed = setInterval(() => {
+          if (newWindow.closed) {
+            clearInterval(checkWindowClosed);
+            resetForm();
+            if (auth.currentUser) {
+              resetStressCount(auth.currentUser.uid);
+            }
+          }
+        }, 500);
+      } else {
+        toast({
+          title: "Popup blocked",
+          description: "Please allow popups for this site to send email",
+          status: "error",
+          duration: 4000,
+          isClosable: true,
+          position: "top",
+        });
+      }
     } catch (error) {
       toast({
         title: "Error",
-        description: `Failed to send email: ${error.message}`,
+        description: `Failed to save request: ${error.message}`,
         status: "error",
         duration: 4000,
         isClosable: true,

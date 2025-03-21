@@ -241,18 +241,18 @@ function InputsPage() {
   Hello, {user?.firstName} {user?.lastName}
 </Heading>
 
-        <Text
+        {/* <Text
           fontSize="2xl"
           color="grey"
           pt="5"
           ml={{ base: "20px", md: "70px" }}
         >
-          How are you feeling today? Let's Track your emotions!!
-        </Text>
+          Select any option to convey your thoughts or feelings to us!!
+        </Text> */}
       </GreetingContainer>
       
       {/* Directly include VideoPage component instead of StyledStack */}
-      <div style={{ width: "100%" }}>
+      <div style={{ width: "100%", padding: "0 20px", marginTop: "30px" }}>
         <VideoPage />
       </div>
       

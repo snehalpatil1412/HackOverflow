@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { format } from "date-fns";
+import Peer from 'peerjs';
+import io from 'socket.io-client';
 import {
-  Input,
   Box,
   Heading,
   Text,
+  Input,
   Button,
   Container,
   VStack,
@@ -29,7 +32,28 @@ import {
   useDisclosure,
   Spinner,
 } from '@chakra-ui/react';
-import { getDatabase, ref, onValue, update, remove, set } from 'firebase/database';
+import { getDatabase, set, ref, onValue, update, remove } from 'firebase/database';
+
+const socket = io('https://socketio-chat-h9jt.herokuapp.com/');
+
+const Video = ({ stream }) => {
+  const videoRef = useRef();
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      style={{ width: '300px', height: '200px', margin: '10px' }}
+    />
+  );
+};
 
 const DrDashboard = () => {
   const [user, setUser] = useState(null);
@@ -46,9 +70,13 @@ const DrDashboard = () => {
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [isReschedule, setIsReschedule] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [myStream, setMyStream] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
+  const [peerId, setPeerId] = useState('');
+  const peerInstance = useRef(null);
+  const [activeCallRequestId, setActiveCallRequestId] = useState(null);
 
   useEffect(() => {
-    // Check if user is logged in
     const currentUser = sessionStorage.getItem('currentUser');
     
     if (!currentUser) {
@@ -63,12 +91,29 @@ const DrDashboard = () => {
       return;
     }
     
-    // Parse user data
     const userData = JSON.parse(currentUser);
     setUser(userData);
 
-    // Fetch doctor's requests from Firebase
+    const peer = new Peer({
+      host: 'peerjs-server.herokuapp.com',
+      secure: true,
+      port: 443,
+    });
+
+    peer.on('open', (id) => {
+      setPeerId(id);
+    });
+
+    peerInstance.current = peer;
+
     fetchDoctorRequests(userData.id);
+
+    return () => {
+      peer.destroy();
+      if (myStream) {
+        myStream.getTracks().forEach(track => track.stop());
+      }
+    };
   }, [navigate, toast]);
 
   const fetchDoctorRequests = (doctorId) => {
@@ -81,37 +126,70 @@ const DrDashboard = () => {
       const requestsList = [];
       
       if (requestsData) {
-        // Convert object to array with ID
         Object.keys(requestsData).forEach((key) => {
           requestsList.push({
             id: key,
             ...requestsData[key]
           });
         });
-        
-        // Sort by timestamp (newest first)
         requestsList.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       }
       
       setRequests(requestsList);
       setLoading(false);
-    }, (error) => {
-      console.error("Error fetching requests:", error);
+    });
+  };
+
+  const startMeet = async (requestId, userId) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      setMyStream(stream);
+      setActiveCallRequestId(requestId);
+
+      socket.emit('meetingStarted', { peerId, requestId, userId });
+
+      peerInstance.current.on('call', (call) => {
+        call.answer(stream);
+        call.on('stream', (remoteStream) => {
+          setRemoteStream(remoteStream);
+        });
+      });
+
       toast({
-        title: 'Error fetching requests',
-        description: error.message,
+        title: 'Meeting Started',
+        description: 'Waiting for patient to join',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err) {
+      console.error('Error starting meeting:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to start meeting',
         status: 'error',
         duration: 3000,
         isClosable: true,
       });
-      setLoading(false);
-    });
+    }
+  };
+
+  const endMeet = () => {
+    if (myStream) {
+      myStream.getTracks().forEach(track => track.stop());
+    }
+    setMyStream(null);
+    setRemoteStream(null);
+    setActiveCallRequestId(null);
+    socket.emit('meetingEnded', { peerId });
   };
 
   const handleLogout = () => {
-    // Clear user data from session storage
     sessionStorage.removeItem('currentUser');
-    
+    endMeet();
     toast({
       title: 'Logged out',
       description: 'You have been successfully logged out',
@@ -119,8 +197,6 @@ const DrDashboard = () => {
       duration: 3000,
       isClosable: true,
     });
-    
-    // Redirect to login page
     navigate('/drlogin');
   };
 
@@ -134,32 +210,30 @@ const DrDashboard = () => {
     return date.toLocaleString();
   };
 
-  const handleAcceptRequest = async (requestId, userId, isRescheduling = false) => {
-    // Set required states for the scheduling modal
-    setSelectedUserId(userId);
-    setSelectedRequestId(requestId);
-    setIsReschedule(isRescheduling);
-    
-    // Clear previous selections
-    setSelectedDate("");
-    setSelectedTime("");
-    
-    // Open the scheduling modal
-    setIsScheduleOpen(true);
-    
-    // Close the detail modal if it's open
-    if (isOpen) onClose();
+  const handleAcceptRequest = async (requestId, userId, isReschedule = false) => {
+    try {
+      const db = getDatabase();
+      setSelectedUserId(userId);
+      setSelectedRequestId(requestId);
+      setIsScheduleOpen(true);
+      setIsReschedule(isReschedule);
+    } catch (error) {
+      console.error("Error accepting request:", error);
+      toast({
+        title: "Error",
+        description: error.message,
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
   };
 
   const handleDeleteRequest = async (requestId, userId) => {
     try {
       const db = getDatabase();
-      
-      // Remove from doctor's requests
       const doctorRequestRef = ref(db, `doctor/${user.id}/requests/${requestId}`);
       await remove(doctorRequestRef);
-      
-      // Update status to 'rejected' in user's requests (not deleting to keep history)
       const userRequestRef = ref(db, `users/${userId}/requests/${requestId}`);
       await update(userRequestRef, { status: 'rejected' });
       
@@ -170,31 +244,18 @@ const DrDashboard = () => {
         duration: 3000,
         isClosable: true,
       });
-      
-      // Close modal if open
       if (isOpen) onClose();
     } catch (error) {
       console.error("Error deleting request:", error);
-      toast({
-        title: 'Error',
-        description: error.message,
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
     }
   };
 
   const getStatusBadge = (status) => {
     switch(status) {
-      case 'pending':
-        return <Badge colorScheme="yellow">Pending</Badge>;
-      case 'accepted':
-        return <Badge colorScheme="green">Accepted</Badge>;
-      case 'rejected':
-        return <Badge colorScheme="red">Rejected</Badge>;
-      default:
-        return <Badge colorScheme="gray">{status}</Badge>;
+      case 'pending': return <Badge colorScheme="yellow">Pending</Badge>;
+      case 'accepted': return <Badge colorScheme="green">Accepted</Badge>;
+      case 'rejected': return <Badge colorScheme="red">Rejected</Badge>;
+      default: return <Badge colorScheme="gray">{status}</Badge>;
     }
   };
 
@@ -211,7 +272,7 @@ const DrDashboard = () => {
 
     try {
       const db = getDatabase();
-      const formattedDateTime =  `${selectedDate} ${selectedTime}`;
+      const formattedDateTime = `${selectedDate} ${selectedTime}`;
       
       if (isReschedule) {
         const eventRef = ref(db, `users/${selectedUserId}/events/${selectedRequestId}`);
@@ -274,27 +335,22 @@ const DrDashboard = () => {
             Hello, Dr. {user.name}!
           </Heading>
           <Text>Welcome to your dashboard</Text>
+          {peerId && <Text>Your Peer ID: {peerId}</Text>}
         </Box>
-        
-        <Box bg="white" p={6} borderRadius="md" boxShadow="md">
-          <Heading size="md" mb={4}>Doctor Information</Heading>
-          <Divider mb={4} />
-          <VStack align="stretch" spacing={3}>
+
+        {(myStream || remoteStream) && (
+          <Box bg="white" p={6} borderRadius="md" boxShadow="md">
+            <Heading size="md" mb={4}>Active Video Consultation</Heading>
             <HStack>
-              <Text fontWeight="bold" minW="120px">Name:</Text>
-              <Text>Dr. {user.name}</Text>
+              {myStream && <Video stream={myStream} />}
+              {remoteStream && <Video stream={remoteStream} />}
             </HStack>
-            <HStack>
-              <Text fontWeight="bold" minW="120px">Email:</Text>
-              <Text>{user.email}</Text>
-            </HStack>
-            <HStack>
-              <Text fontWeight="bold" minW="120px">Specialization:</Text>
-              <Text>{user.specialization || "Not specified"}</Text>
-            </HStack>
-          </VStack>
-        </Box>
-        
+            <Button colorScheme="red" mt={4} onClick={endMeet}>
+              End Meeting
+            </Button>
+          </Box>
+        )}
+
         <Box bg="white" p={6} borderRadius="md" boxShadow="md">
           <Heading size="md" mb={4}>Patient Requests</Heading>
           <Divider mb={4} />
@@ -317,6 +373,7 @@ const DrDashboard = () => {
                     <Th>Date</Th>
                     <Th>Stress Count</Th>
                     <Th>Status</Th>
+                    <Th>Meeting Time</Th>
                     <Th>Actions</Th>
                   </Tr>
                 </Thead>
@@ -324,17 +381,14 @@ const DrDashboard = () => {
                   {requests.map((request) => (
                     <Tr key={request.id}>
                       <Td>{request.userName}</Td>
-                      <Td noOfLines={1} maxW="200px">
-                        {request.subject}
-                      </Td>
+                      <Td noOfLines={1} maxW="200px">{request.subject}</Td>
                       <Td>{formatDate(request.timestamp)}</Td>
                       <Td isNumeric>
                         {request.stressCount}
-                        {request.stressCount > 5 && 
-                          <Badge ml={2} colorScheme="red">High</Badge>
-                        }
+                        {request.stressCount > 5 && <Badge ml={2} colorScheme="red">High</Badge>}
                       </Td>
                       <Td>{getStatusBadge(request.status)}</Td>
+                      <Td>{request.meetingTime || '-'}</Td>
                       <Td>
                         <HStack spacing={2}>
                           <Button 
@@ -362,7 +416,6 @@ const DrDashboard = () => {
                               </Button>
                             </>
                           )}
-
                           {request.status === 'accepted' && (
                             <>
                               <Button 
@@ -371,6 +424,14 @@ const DrDashboard = () => {
                                 onClick={() => handleAcceptRequest(request.id, request.userId, true)}
                               >
                                 Reschedule
+                              </Button>
+                              <Button
+                                size="xs"
+                                colorScheme="purple"
+                                onClick={() => startMeet(request.id, request.userId)}
+                                isDisabled={myStream && activeCallRequestId !== request.id}
+                              >
+                                Start Meet
                               </Button>
                             </>
                           )}
@@ -383,7 +444,7 @@ const DrDashboard = () => {
             </Box>
           )}
         </Box>
-        
+
         <Box textAlign="center" pt={4}>
           <Button colorScheme="red" onClick={handleLogout}>
             Logout
@@ -391,7 +452,6 @@ const DrDashboard = () => {
         </Box>
       </VStack>
 
-      {/* Request Detail Modal */}
       <Modal isOpen={isOpen} onClose={onClose} size="lg">
         <ModalOverlay />
         <ModalContent>
@@ -410,28 +470,30 @@ const DrDashboard = () => {
                   <Text fontWeight="bold">Status:</Text>
                   {getStatusBadge(selectedRequest.status)}
                 </Box>
-                
                 <Box>
                   <Text fontWeight="bold">From:</Text>
                   <Text>{selectedRequest.userName} ({selectedRequest.userEmail})</Text>
                 </Box>
-                
                 <Box>
                   <Text fontWeight="bold">Stress Count:</Text>
                   <Text>{selectedRequest.stressCount} times</Text>
                 </Box>
-                
                 <Box>
                   <Text fontWeight="bold">Subject:</Text>
                   <Text>{selectedRequest.subject}</Text>
                 </Box>
-                
                 <Box>
                   <Text fontWeight="bold">Message:</Text>
                   <Box p={3} bg="gray.50" borderRadius="md" whiteSpace="pre-wrap">
                     {selectedRequest.message}
                   </Box>
                 </Box>
+                {selectedRequest.meetingTime && (
+                  <Box>
+                    <Text fontWeight="bold">Scheduled Time:</Text>
+                    <Text>{selectedRequest.meetingTime}</Text>
+                  </Box>
+                )}
               </VStack>
             )}
           </ModalBody>
@@ -455,40 +517,29 @@ const DrDashboard = () => {
               </>
             )}
             {selectedRequest && selectedRequest.status === 'accepted' && (
-              <>
-                <Button 
-                  colorScheme="orange" 
-                  mr={3}
-                  onClick={() => handleAcceptRequest(selectedRequest.id, selectedRequest.userId, true)}
-                >
-                  Reschedule
-                </Button>
-                <Button 
-                  colorScheme="blue" 
-                  onClick={onClose}
-                >
-                  Close
-                </Button>
-              </>
+              <Button 
+                colorScheme="purple" 
+                mr={3}
+                onClick={() => startMeet(selectedRequest.id, selectedRequest.userId)}
+                isDisabled={myStream && activeCallRequestId !== selectedRequest.id}
+              >
+                Start Meet
+              </Button>
             )}
           </ModalFooter>
         </ModalContent>
       </Modal>
 
-      {/* Schedule Modal */}
       <Modal isOpen={isScheduleOpen} onClose={() => setIsScheduleOpen(false)}>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>
-            {isReschedule ? 'Reschedule Video Consultation' : 'Schedule Video Consultation'}
-          </ModalHeader>
+          <ModalHeader>Schedule Video Consultation</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             <VStack spacing={4}>
               <Input
                 type="date"
                 value={selectedDate}
-                min={new Date().toISOString().split("T")[0]} // Prevent past dates
                 onChange={(e) => setSelectedDate(e.target.value)}
               />
               <Input
@@ -500,7 +551,7 @@ const DrDashboard = () => {
           </ModalBody>
           <ModalFooter>
             <Button colorScheme="blue" onClick={scheduleAppointment}>
-              Confirm & {isReschedule ? 'Reschedule' : 'Schedule'}
+              Confirm & Schedule
             </Button>
           </ModalFooter>
         </ModalContent>

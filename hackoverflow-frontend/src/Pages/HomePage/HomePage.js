@@ -62,7 +62,7 @@ function HomePage() {
             </Slider>
             <HomeText>
               <Heading>Welcome To Calmify!</Heading>
-              <Text>Your space to find solutions to emotions.....</Text>
+              <Text>Your space to find solutions to emotions.</Text>
               <StartButton onClick={handleStart}>
                 <span>GET STARTED</span>
                 <ArrowIcon
@@ -141,7 +141,7 @@ const Heading = styled.div`
   color: #fff;
   font-size: 40px;
   font-weight: bold;
-  font-family: Times New Roman;
+  font-family: Helvetica;
   text-shadow: 0 1px 0 #ccc, 0 2px 0 #c9c9c9, 0 3px 0 #bbb, 0 4px 0 #b9b9b9,
     0 5px 0 #aaa, 0 0 5px rgba(0, 0, 0, 0.1), 0 10px 10px rgba(0, 0, 0, 0.2),
     0 20px 20px rgba(0, 0, 0, 0.15);
@@ -152,7 +152,7 @@ const Heading = styled.div`
 `;
 
 const Text = styled.div`
-  color: Black;
+  color: black;
   font-size: 16px;
 
   @media (min-width: 768px) {
@@ -161,16 +161,16 @@ const Text = styled.div`
 `;
 
 const StartButton = styled.button`
-  background-color: rgb(78, 145, 78);
+  background-color: rgb(131, 172, 131);
   color: white;
   padding: 10px 15px;
-  font-size: 16px;
+  font-size: 14px;
   font-family: 'Roboto', sans-serif;
   border: none;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  border-radius: 8px;
+  border-radius: 6px;
   margin-top: 20px;
   gap: 10px;
   width: 165px;
@@ -178,7 +178,7 @@ const StartButton = styled.button`
   transition: background-color 0.3s ease;
 
   &:hover {
-    background-color:rgb(144, 190, 129);
+    background-color: #a8cc9c;
   }
 
   @media (min-width: 768px) {
