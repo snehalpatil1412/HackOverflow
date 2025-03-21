@@ -75,6 +75,7 @@ const DrDashboard = () => {
   const [peerId, setPeerId] = useState('');
   const peerInstance = useRef(null);
   const [activeCallRequestId, setActiveCallRequestId] = useState(null);
+  const [pc, setPc] = useState(null);
 
   useEffect(() => {
     const currentUser = sessionStorage.getItem('currentUser');
@@ -90,31 +91,39 @@ const DrDashboard = () => {
       navigate('/drlogin');
       return;
     }
-    
+
     const userData = JSON.parse(currentUser);
     setUser(userData);
 
-    const peer = new Peer({
-      host: 'peerjs-server.herokuapp.com',
-      secure: true,
-      port: 443,
+    // ✅ Get user media (camera + mic)
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then((stream) => {
+        setMyStream(stream);
+      })
+      .catch((error) => {
+        console.error("Error accessing media devices:", error);
+      });
+
+    // ✅ Initialize WebRTC
+    const newPc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
 
-    peer.on('open', (id) => {
-      setPeerId(id);
-    });
+    setPc(newPc);
 
-    peerInstance.current = peer;
-
+    // ✅ Fetch patient requests from Firebase
     fetchDoctorRequests(userData.id);
 
     return () => {
-      peer.destroy();
+      if (newPc) {
+        newPc.close();
+      }
       if (myStream) {
         myStream.getTracks().forEach(track => track.stop());
       }
     };
   }, [navigate, toast]);
+
 
   const fetchDoctorRequests = (doctorId) => {
     setLoading(true);
@@ -147,17 +156,26 @@ const DrDashboard = () => {
         audio: true,
       });
       setMyStream(stream);
-      setActiveCallRequestId(requestId);
-
-      socket.emit('meetingStarted', { peerId, requestId, userId });
-
-      peerInstance.current.on('call', (call) => {
-        call.answer(stream);
-        call.on('stream', (remoteStream) => {
-          setRemoteStream(remoteStream);
-        });
-      });
-
+  
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+  
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+  
+      pc.onicecandidate = event => {
+        if (event.candidate) {
+          set(ref(getDatabase(), `calls/${requestId}/callerCandidate`), event.candidate);
+        }
+      };
+  
+      pc.ontrack = event => {
+        setRemoteStream(event.streams[0]);
+      };
+  
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      
+      await set(ref(getDatabase(), `calls/${requestId}/offer`), { sdp: offer.sdp, type: offer.type });
+  
       toast({
         title: 'Meeting Started',
         description: 'Waiting for patient to join',
@@ -167,13 +185,6 @@ const DrDashboard = () => {
       });
     } catch (err) {
       console.error('Error starting meeting:', err);
-      toast({
-        title: 'Error',
-        description: 'Failed to start meeting',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
     }
   };
 

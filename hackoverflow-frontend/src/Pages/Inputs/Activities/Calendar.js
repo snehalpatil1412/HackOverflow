@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
-import { getDatabase, ref, set, onValue, remove } from 'firebase/database';
+import { getDatabase, ref, set, onValue, remove, get } from 'firebase/database';
 import { auth } from '../../../firebaseConfig';  // Firebase config import
 import Delete from "../../../assets/trash.png";
 import { ToastContainer, toast } from 'react-toastify';
@@ -93,6 +93,7 @@ const Calendar = () => {
   const [activeMeeting, setActiveMeeting] = useState(null); // Track active meeting
   const [meetingStates, setMeetingStates] = useState({}); // Track canJoin for each event
   const peerInstance = useRef(null);
+const [pc, setPc] = useState(null);  
 
 
   useEffect(() => {
@@ -102,37 +103,46 @@ const Calendar = () => {
         const db = await initializeIndexedDB();
         const registration = await registerServiceWorker();
         setSwRegistration(registration);
-        
-        // Initialize PeerJS
-        const peer = new Peer({
-          host: 'peerjs-server.herokuapp.com',
-          secure: true,
-          port: 443,
-        });
-        peerInstance.current = peer;
 
         fetchEvents();
 
-        socket.on('meetingStarted', (data) => {
-          setMeetingStates(prev => ({
-            ...prev,
-            [data.requestId]: { canJoin: true, doctorPeerId: data.peerId }
-          }));
-          toast({
-            title: "Meeting Started",
-            description: "Doctor has started the meeting. You can join now.",
-            status: "info",
-            duration: 5000,
-            isClosable: true,
-          });
-        });
+        // ✅ Get user media (camera + mic)
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        setMyStream(stream);
 
-        socket.on('meetingEnded', () => {
-          if (myStream) {
-            myStream.getTracks().forEach(track => track.stop());
-            setMyStream(null);
-            setRemoteStream(null);
-            setActiveMeeting(null);
+        // ✅ Initialize WebRTC
+        const newPc = new RTCPeerConnection({
+          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        });
+        setPc(newPc);
+
+        stream.getTracks().forEach(track => newPc.addTrack(track, stream));
+
+        newPc.ontrack = event => {
+          setRemoteStream(event.streams[0]);
+        };
+
+        newPc.onicecandidate = event => {
+          if (event.candidate) {
+            set(ref(getDatabase(), `calls/${activeMeeting}/receiverCandidate`), event.candidate);
+          }
+        };
+
+        // ✅ Listen for Doctor's Meeting Start in Firebase
+        const meetingRef = ref(getDatabase(), "calls/");
+        onValue(meetingRef, (snapshot) => {
+          if (snapshot.exists()) {
+            setMeetingStates(prev => ({
+              ...prev,
+              [snapshot.key]: { canJoin: true }
+            }));
+            toast({
+              title: "Meeting Started",
+              description: "Doctor has started the meeting. You can join now.",
+              status: "info",
+              duration: 5000,
+              isClosable: true,
+            });
           }
         });
 
@@ -140,12 +150,8 @@ const Calendar = () => {
 
         return () => {
           clearInterval(intervalId);
-          peer.destroy();
-          socket.off('meetingStarted');
-          socket.off('meetingEnded');
-          if (myStream) {
-            myStream.getTracks().forEach(track => track.stop());
-          }
+          if (newPc) newPc.close();
+          if (myStream) myStream.getTracks().forEach(track => track.stop());
         };
       } catch (error) {
         console.error('Error during initialization:', error);
@@ -155,20 +161,42 @@ const Calendar = () => {
     initialize();
   }, []);
 
-  const joinMeet = async (eventId, doctorPeerId) => {
+
+  const joinMeet = async (requestId) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setMyStream(stream);
-      setActiveMeeting(eventId);
-
-      const call = peerInstance.current.call(doctorPeerId, stream);
-      call.on('stream', (remoteStream) => {
-        setRemoteStream(remoteStream);
-      });
-
+  
+      const db = getDatabase();
+      const offerRef = ref(db, `calls/${requestId}/offer`);
+      const offerSnapshot = await get(offerRef);
+  
+      if (!offerSnapshot.exists()) {
+        toast({ title: "No active meeting", status: "error", duration: 3000, isClosable: true });
+        return;
+      }
+  
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+  
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+  
+      pc.onicecandidate = event => {
+        if (event.candidate) {
+          set(ref(db, `calls/${requestId}/receiverCandidate`), event.candidate);
+        }
+      };
+  
+      pc.ontrack = event => {
+        setRemoteStream(event.streams[0]);
+      };
+  
+      await pc.setRemoteDescription(new RTCSessionDescription(offerSnapshot.val()));
+  
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+  
+      await set(ref(db, `calls/${requestId}/answer`), { sdp: answer.sdp, type: answer.type });
+  
       toast({
         title: "Joined Meeting",
         description: "You have successfully joined the meeting",
@@ -178,13 +206,6 @@ const Calendar = () => {
       });
     } catch (err) {
       console.error('Error joining meeting:', err);
-      toast({
-        title: "Error",
-        description: "Failed to join meeting",
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
     }
   };
 
