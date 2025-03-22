@@ -225,21 +225,21 @@ const VideoPage = () => {
 
   const handleProcessVideo = async () => {
     if (!videoBlob) return;
-
+  
     setIsProcessing(true);
     const formData = new FormData();
     formData.append("file", videoBlob);
     formData.append("language", language); // Send the selected language to the backend
-
+  
     try {
       const response = await fetch("http://127.0.0.1:8000/api/upload_video/", {
         method: "POST",
         body: formData,
       });
-
+  
       const data = await response.json();
       console.log("Response Data:", data);
-
+  
       setEmotion(data["Final Stress Decision"]);
       setExtractedText(data["Extracted Text"]);
       setDetectedLanguage(data["Detected Language"] || language);
@@ -250,14 +250,17 @@ const VideoPage = () => {
       }
       
       // Remove the instruction part and format with Calmify signature
+      let formattedSuggestions = "No AI suggestions available.";
       if (data["Suggestions"]) {
         const suggestionText = data["Suggestions"];
         // Extract just the advice part, removing instructions
         const mainContent = suggestionText.split("Dear user,")[1] || suggestionText;
         // Replace any closing like "Sincerely, your AI assistant" with "Sincerely, your Calmify"
-        const formattedText = mainContent.replace(/Sincerely,.*$/m, "Sincerely, your Calmify.");
-        setAiSuggestions(formattedText);
+        formattedSuggestions = mainContent.replace(/Sincerely,.*$/m, "Sincerely, your Calmify.");
+        setAiSuggestions(formattedSuggestions);
       }
+  
+      // Videos are only shown for stressed states
       if (data["Final Stress Decision"] === "Highly Stressed" || data["Final Stress Decision"] === "Moderate Stress") {
         const shuffledVideos = shuffleArray(youtubeVideos).slice(0, 3);
         setVideos(shuffledVideos);
@@ -266,19 +269,27 @@ const VideoPage = () => {
           title: video.title,
           url: video.url,
         }));
-        
-        // Format suggestions directly here instead of relying on state
-        let formattedSuggestions = "No AI suggestions available.";
-        if (data["Suggestions"]) {
-          const suggestionText = data["Suggestions"];
-          const mainContent = suggestionText.split("Dear user,")[1] || suggestionText;
-          formattedSuggestions = mainContent.replace(/Sincerely,.*$/m, "Sincerely, your Calmify.");
-        }
-        
-        // Use the formatted suggestions directly
-        await saveStressData("video", data["Extracted Text"], data["Final Stress Decision"], videoSuggestions, formattedSuggestions);
+      } else {
+        // Clear videos for "Not Stressed" state
+        setVideos([]);
       }
-
+      
+      // Always save data to Firebase regardless of stress level
+      const videoSuggestions = data["Final Stress Decision"] === "Not Stressed" 
+        ? [] 
+        : videos.map(video => ({
+            title: video.title,
+            url: video.url,
+          }));
+          
+      await saveStressData(
+        "video", 
+        data["Extracted Text"], 
+        data["Final Stress Decision"], 
+        videoSuggestions, 
+        formattedSuggestions
+      );
+  
     } catch (error) {
       console.error("Error processing video:", error);
       setEmotion("Error detecting stress");

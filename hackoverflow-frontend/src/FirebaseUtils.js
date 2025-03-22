@@ -10,14 +10,9 @@ const saveStressData = async (inputType, inputData, prediction, videoSuggestions
     return;
   }
 
-  const isStressDetected = 
-    prediction === "Highly Stressed" || prediction === "Moderate Stress" || prediction === "Stressed";
-
-  if (!isStressDetected) {
-    console.log("Not stressed, skipping Firebase save.");
-    return;
-  }
-
+  // Removed the conditional check that previously only counted stress entries
+  // Now all predictions will be saved including "Not Stressed"
+  
   const timestamp = new Date().toLocaleString();
   const stressCountRef = ref(db, `users/${userId}/input/stress_count`);
 
@@ -31,15 +26,16 @@ const saveStressData = async (inputType, inputData, prediction, videoSuggestions
     await set(inputRef, {
       input: inputData ?? "No input provided",
       prediction: prediction ?? "Unknown",
-      suggestions: videoSuggestions ?? [], // ✅ YouTube videos stored here
-      aiSuggestions: aiSuggestions ?? "No AI suggestions", // ✅ AI response stored here
+      suggestions: videoSuggestions ?? [],
+      aiSuggestions: aiSuggestions ?? "No AI suggestions",
       timestamp: timestamp,
     });
 
+    // Increment the stress count for all entries including "Not Stressed"
     stressCount += 1;
     await update(stressCountRef, { count: stressCount });
 
-    console.log(`Stress detected! Total count: ${stressCount}`);
+    console.log(`Prediction recorded! Total count: ${stressCount}`);
 
     if (stressCount >= 6) {
       console.log("STRESSED OVERLOADED!");
@@ -48,7 +44,5 @@ const saveStressData = async (inputType, inputData, prediction, videoSuggestions
     console.error("Error saving stress data:", error);
   }
 };
-
-
 
 export default saveStressData;

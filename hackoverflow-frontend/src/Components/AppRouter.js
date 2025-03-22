@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect} from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-dom";
 // import AudioPage from "../Pages/Inputs/AudioPage";
 import VideoPage from "../Pages/Inputs/VideoPage";
@@ -21,6 +20,7 @@ import { getAuth, onAuthStateChanged } from "firebase/auth";
 import LoaderComponent from "./Loader";
 import DrLogin from "../Pages/Authentication/DrLogin";
 import DrDashboard from "../Pages/DrDashboard/DrDashboard";
+import UserHistory from "../Pages/Inputs/UserHistory.js";
 
 export default function AppRouter() {
   const [user, setUser] = useState(null);
@@ -57,6 +57,7 @@ export default function AppRouter() {
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/drlogin" element={<DrLogin />} />
         <Route path="/drdashboard" element={<DrDashboard />} />
+        <Route path="/history" element={<UserHistory />} />
 
       </Routes>
     </Router>
